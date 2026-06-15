@@ -1,0 +1,49 @@
+# Auto-deploy Flutter Web ke Cloud Run saat push (via Cloud Build trigger).
+substitutions:
+  _REGION: asia-southeast2
+  _SERVICE: wachat-web
+  _REPO: cloud-run-source-deploy
+  _BACKEND_URL: https://wachat-backend-1018591685581.asia-southeast2.run.app
+
+steps:
+  # 1) Build Flutter Web (URL backend disuntik saat build).
+  - name: ghcr.io/cirruslabs/flutter:3.41.9
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        git config --global --add safe.directory '*'
+        flutter pub get
+        flutter build web --release --dart-define=BACKEND_URL=${_BACKEND_URL}
+  # 2) Bungkus hasil build ke image nginx.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+  # 3) Deploy ke Cloud Run.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --allow-unauthenticated
+      - --port
+      - '8080'
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

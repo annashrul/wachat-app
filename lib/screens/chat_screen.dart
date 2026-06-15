@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import 'forward_screen.dart';
@@ -11,12 +14,14 @@ import 'profile_view_screen.dart';
 import 'group_info_screen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/call_provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/sticker_picker.dart';
+import '../widgets/voice_message.dart';
 
 class ChatScreen extends StatefulWidget {
   final Conversation conversation;
@@ -53,6 +58,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _searchDebounce;
   final Map<String, GlobalKey> _msgKeys = {};
 
+  // Rekam pesan suara.
+  final _recorder = AudioRecorder();
+  bool _recording = false;
+  bool _recordBlink = false;
+  int _recordSecs = 0;
+  Timer? _recordTimer;
+  // Preview sebelum kirim (ala WhatsApp): hasil rekaman yang siap didengar.
+  String? _recordedPath;
+  int _recordedSecs = 0;
+
+  // Sorot sementara pesan tujuan (saat kutipan reply diketuk).
+  String? _flashId;
+  Timer? _flashTimer;
+  bool _scrollingToMsg = false; // cegah lompatan tumpang-tindih
+
   String get _convId => widget.conversation.id;
 
   @override
@@ -86,6 +106,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _input.dispose();
     _searchCtrl.dispose();
     _searchDebounce?.cancel();
+    _recordTimer?.cancel();
+    _flashTimer?.cancel();
+    _recorder.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -184,6 +207,123 @@ class _ChatScreenState extends State<ChatScreen> {
           SnackBar(content: Text(ApiClient.errorMessage(e))),
         );
       }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  // ===== Pesan suara =====
+  Future<void> _startRecording() async {
+    try {
+      if (!await _recorder.hasPermission()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Izin mikrofon ditolak')),
+          );
+        }
+        return;
+      }
+      String path;
+      if (kIsWeb) {
+        path = 'voice.m4a'; // di web diabaikan (rekam ke memori)
+      } else {
+        final dir = await getTemporaryDirectory();
+        path =
+            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      }
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _recordSecs = 0;
+        _recordBlink = true;
+      });
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) {
+          setState(() {
+            _recordSecs++;
+            _recordBlink = !_recordBlink;
+          });
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal merekam: $e')));
+      }
+    }
+  }
+
+  /// Batal merekam (buang rekaman).
+  Future<void> _cancelRecording() async {
+    _recordTimer?.cancel();
+    try {
+      await _recorder.stop();
+    } catch (_) {}
+    if (mounted) setState(() => _recording = false);
+  }
+
+  /// Stop merekam → masuk mode PREVIEW (bisa didengarkan dulu sebelum kirim).
+  Future<void> _stopRecording() async {
+    _recordTimer?.cancel();
+    final secs = _recordSecs;
+    final messenger = ScaffoldMessenger.of(context);
+    String? path;
+    try {
+      path = await _recorder.stop();
+    } catch (_) {}
+    if (!mounted) return;
+    if (path == null || secs < 1) {
+      setState(() => _recording = false);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Rekaman terlalu pendek')),
+      );
+      return;
+    }
+    setState(() {
+      _recording = false;
+      _recordedPath = path;
+      _recordedSecs = secs;
+    });
+  }
+
+  /// Buang hasil rekaman di preview.
+  void _discardRecorded() {
+    setState(() {
+      _recordedPath = null;
+      _recordedSecs = 0;
+    });
+  }
+
+  /// Kirim rekaman dari preview.
+  Future<void> _sendRecorded() async {
+    final path = _recordedPath;
+    final secs = _recordedSecs;
+    if (path == null) return;
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _recordedPath = null;
+      _recordedSecs = 0;
+      _uploading = true;
+    });
+    try {
+      final bytes = await XFile(path).readAsBytes();
+      final name = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final up = await chat.service.uploadFile(bytes, name);
+      chat.sendMedia(
+        _convId,
+        type: 'VOICE',
+        mediaUrl: up.url,
+        mediaName: name,
+        content: secs.toString(),
+      );
+      _scrollToBottom();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -366,6 +506,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               actions: [
+                if (!isGroup)
+                  IconButton(
+                    icon: const Icon(Icons.call_rounded),
+                    tooltip: 'Panggilan suara',
+                    onPressed: () =>
+                        context.read<CallProvider>().startCall(liveConv),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.search_rounded),
                   onPressed: () => setState(() => _searching = true),
@@ -435,9 +582,28 @@ class _ChatScreenState extends State<ChatScreen> {
                                           : null,
                                       highlight:
                                           _searching ? _searchQuery : null,
+                                      onQuoteTap: (id) =>
+                                          _scrollToMessage(id, flash: true),
+                                      onCallBack: isGroup
+                                          ? null
+                                          : () => context
+                                              .read<CallProvider>()
+                                              .startCall(liveConv),
                                     ),
                                   ),
                                 );
+                                // Kedip sorot saat pesan ini jadi tujuan lompat.
+                                if (m.id == _flashId) {
+                                  item = AnimatedContainer(
+                                    duration:
+                                        const Duration(milliseconds: 300),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withValues(alpha: 0.12),
+                                    child: item,
+                                  );
+                                }
                                 if (mine && !m.deleted) {
                                   item = Dismissible(
                                     key: ValueKey(m.id),
@@ -701,12 +867,17 @@ class _ChatScreenState extends State<ChatScreen> {
         return '📎 ${m.mediaName ?? 'File'}';
       case 'STICKER':
         return '${m.content ?? '🙂'} Stiker';
+      case 'VOICE':
+        return '🎤 Pesan suara';
+      case 'CALL':
+        return '📞 Panggilan suara';
       default:
         return m.content ?? '';
     }
   }
 
   void _showMessageMenu(Message m, bool mine) {
+    if (m.type == 'CALL') return; // event panggilan: tak ada aksi
     final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
@@ -973,43 +1144,73 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _scrollToMatchMessage() async {
     if (_matchPos < 0 || _matchPos >= _searchResults.length) return;
-    final targetId = _searchResults[_matchPos].id;
+    await _scrollToMessage(_searchResults[_matchPos].id);
+  }
 
-    // Muat pesan lama dulu sampai pesan target ter-load (lewati pagination).
-    var guard = 0;
-    while (!_chatProv.messages.any((m) => m.id == targetId) &&
-        _chatProv.hasMore &&
-        guard < 30) {
-      await _chatProv.loadMore(_convId);
-      guard++;
-    }
-    if (!mounted) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ctx = _msgKeys[targetId]?.currentContext;
-      if (ctx != null) {
-        // ignore: use_build_context_synchronously
-        await Scrollable.ensureVisible(ctx,
-            alignment: 0.4, duration: const Duration(milliseconds: 300));
-        return;
-      }
-      // Belum ter-render walau sudah ter-load: lompat proporsional dulu.
-      final msgs = _chatProv.messages;
-      final di = msgs.indexWhere((m) => m.id == targetId);
-      if (di < 0 || !_scroll.hasClients) return;
-      final total = msgs.length;
-      final listIndex = total - 1 - di;
-      final frac = total <= 1 ? 0.0 : listIndex / (total - 1);
-      _scroll.jumpTo(frac * _scroll.position.maxScrollExtent);
-      await Future<void>.delayed(const Duration(milliseconds: 90));
-      if (!mounted) return;
-      final c2 = _msgKeys[targetId]?.currentContext;
-      if (c2 != null) {
-        // ignore: use_build_context_synchronously
-        await Scrollable.ensureVisible(c2,
-            alignment: 0.4, duration: const Duration(milliseconds: 200));
-      }
+  /// Sorot sementara pesan (efek kedip ala WhatsApp saat lompat ke pesan).
+  void _flash(String id) {
+    _flashTimer?.cancel();
+    setState(() => _flashId = id);
+    _flashTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (mounted) setState(() => _flashId = null);
     });
+  }
+
+  /// Lompat ke pesan [targetId] (memuat pesan lama bila perlu) dengan transisi
+  /// mulus. Bila [flash] true, pesan disorot sebentar setelah terlihat.
+  Future<void> _scrollToMessage(String targetId, {bool flash = false}) async {
+    if (_scrollingToMsg) return;
+    _scrollingToMsg = true;
+    try {
+      // 1) Muat pesan lama sampai target benar-benar ada (lewati pagination).
+      //    Batas tinggi + berhenti saat hasMore habis → pesan terlama pun
+      //    pasti ikut ter-load.
+      var guard = 0;
+      while (!_chatProv.messages.any((m) => m.id == targetId) &&
+          _chatProv.hasMore &&
+          guard < 400) {
+        await _chatProv.loadMore(_convId);
+        guard++;
+      }
+      if (!mounted || !_scroll.hasClients) return;
+      if (!_chatProv.messages.any((m) => m.id == targetId)) return;
+
+      // Beri 1 frame agar daftar (yang baru di-prepend) selesai layout.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scroll.hasClients) return;
+
+      // 2) Animasi bertahap menuju estimasi posisi sampai widget target
+      //    ter-render, lalu ensureVisible untuk presisi + transisi halus.
+      //    (ListView malas: item jauh belum dibangun → animasikan mendekat
+      //    sambil estimasi maxScrollExtent ikut menajam tiap langkah.)
+      for (var attempt = 0; attempt < 60; attempt++) {
+        final ctx = _msgKeys[targetId]?.currentContext;
+        if (ctx != null) {
+          // ignore: use_build_context_synchronously
+          await Scrollable.ensureVisible(ctx, alignment: 0.35, duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
+          if (flash) _flash(targetId);
+          return;
+        }
+        final msgs = _chatProv.messages;
+        final di = msgs.indexWhere((m) => m.id == targetId);
+        if (di < 0) return;
+        final pos = _scroll.position;
+        final listIndex = msgs.length - 1 - di; // reverse: makin lama makin atas
+        final frac = msgs.length <= 1 ? 0.0 : listIndex / (msgs.length - 1);
+        final target = frac * pos.maxScrollExtent;
+        // Melangkah 70% mendekat tiap iterasi → konvergen & terlihat bergerak.
+        final next = pos.pixels + (target - pos.pixels) * 0.7;
+        await _scroll.animateTo(
+          next.clamp(0.0, pos.maxScrollExtent),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted || !_scroll.hasClients) return;
+      }
+    } finally {
+      _scrollingToMsg = false;
+    }
   }
 
   Widget _connectionBanner() {
@@ -1079,6 +1280,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInputBar(AppPalette palette) {
     final scheme = Theme.of(context).colorScheme;
+    if (_recordedPath != null) return _buildReviewBar(palette);
+    if (_recording) return _buildRecordingBar(palette);
     return SafeArea(
       top: false,
       child: Padding(
@@ -1129,23 +1332,148 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            // Ada teks → kirim. Kosong → mikrofon (rekam pesan suara).
             GestureDetector(
-              onTap: _hasText ? _sendText : null,
+              onTap: _hasText
+                  ? _sendText
+                  : (_uploading ? null : _startRecording),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: _hasText
-                      ? scheme.primary
-                      : scheme.primary.withValues(alpha: 0.4),
+                  color: scheme.primary,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.send_rounded,
+                child: Icon(
+                  _hasText ? Icons.send_rounded : Icons.mic_rounded,
                   color: Colors.white,
                   size: 22,
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bilah saat sedang merekam pesan suara: hapus • timer • kirim.
+  Widget _buildRecordingBar(AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
+    final mm = (_recordSecs ~/ 60).toString();
+    final ss = (_recordSecs % 60).toString().padLeft(2, '0');
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.delete_rounded, color: scheme.error),
+              tooltip: 'Batal',
+              onPressed: _cancelRecording,
+            ),
+            Expanded(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: palette.cardBorder),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedOpacity(
+                      opacity: _recordBlink ? 1 : 0.25,
+                      duration: const Duration(milliseconds: 400),
+                      child: const Icon(Icons.fiber_manual_record,
+                          color: Color(0xFFEF4444), size: 14),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '$mm:$ss',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Merekam…',
+                        style: TextStyle(color: palette.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Stop → masuk mode preview (dengarkan dulu sebelum kirim).
+            GestureDetector(
+              onTap: _stopRecording,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.stop_rounded,
+                    color: Colors.white, size: 26),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bilah PREVIEW rekaman: hapus • dengarkan (waveform) • kirim — ala WhatsApp.
+  Widget _buildReviewBar(AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.delete_rounded, color: scheme.error),
+              tooltip: 'Hapus',
+              onPressed: _discardRecorded,
+            ),
+            Expanded(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: palette.cardBorder),
+                ),
+                child: VoiceReviewPlayer(
+                  // key per-rekaman agar player ter-reset tiap rekaman baru.
+                  key: ValueKey(_recordedPath),
+                  path: _recordedPath!,
+                  seconds: _recordedSecs,
+                  accent: scheme.primary,
+                  trackColor: palette.muted.withValues(alpha: 0.35),
+                  textColor: palette.muted,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _sendRecorded,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 22),
               ),
             ),
           ],

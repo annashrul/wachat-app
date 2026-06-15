@@ -7,6 +7,10 @@ import 'package:flutter/foundation.dart';
 /// - HP fisik / device lain  -> ganti [lanHost] dengan IP LAN komputer Anda,
 ///                              mis. http://192.168.1.10:3000, lalu set [useLan] = true.
 class AppConfig {
+  // Diisi saat build: `flutter build web --dart-define=BACKEND_URL=https://...`
+  // Kalau diisi, dipakai untuk SEMUA platform (mis. deploy Cloud Run).
+  static const String _envBackend = String.fromEnvironment('BACKEND_URL');
+
   static const bool useLan = true;
   // HP fisik via USB/WiFi-debug + `adb reverse tcp:4100 tcp:4100`:
   //   localhost di HP diteruskan ke localhost komputer (tanpa WiFi/firewall).
@@ -14,6 +18,7 @@ class AppConfig {
   static const String lanHost = 'http://localhost:4100';
 
   static String get baseUrl {
+    if (_envBackend.isNotEmpty) return _envBackend;
     if (useLan) return lanHost;
     if (kIsWeb) return 'http://localhost:3000';
     // Default platform mobile (Android emulator).

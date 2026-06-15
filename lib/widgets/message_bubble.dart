@@ -7,6 +7,7 @@ import '../models/message.dart';
 import '../theme.dart';
 import 'status_tick.dart';
 import 'link_preview.dart';
+import 'voice_message.dart';
 
 final _urlReg = RegExp(r'(https?:\/\/[^\s]+)');
 
@@ -16,6 +17,10 @@ class MessageBubble extends StatelessWidget {
   final bool showSender; // tampilkan nama pengirim (grup)
   final MessageStatus? status; // centang (untuk pesan sendiri)
   final String? highlight; // sorot teks saat pencarian
+  // Ketuk kutipan reply → lompat ke pesan asli.
+  final void Function(String messageId)? onQuoteTap;
+  // Ketuk event panggilan → telepon balik.
+  final VoidCallback? onCallBack;
 
   const MessageBubble({
     super.key,
@@ -24,6 +29,8 @@ class MessageBubble extends StatelessWidget {
     this.showSender = false,
     this.status,
     this.highlight,
+    this.onQuoteTap,
+    this.onCallBack,
   });
 
   Widget _highlightedText(Color textColor, String query) {
@@ -104,6 +111,11 @@ class MessageBubble extends StatelessWidget {
     // Pesan yang sudah dihapus.
     if (message.deleted) {
       return _deletedBubble(palette, metaColor, time);
+    }
+
+    // Event panggilan (ala WhatsApp): ikon telepon + status + durasi.
+    if (message.type == 'CALL') {
+      return _callBubble(context, palette, time);
     }
 
     // Stiker: tampil sebagai emoji besar tanpa gelembung.
@@ -237,6 +249,79 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _callBubble(BuildContext context, AppPalette palette, String time) {
+    final scheme = Theme.of(context).colorScheme;
+    final textColor = isMine ? palette.outgoingText : palette.incomingText;
+    // content = "STATUS|durasiDetik"
+    final parts = (message.content ?? '').split('|');
+    final status = parts.isNotEmpty ? parts[0] : 'COMPLETED';
+    final dur = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    final missed = status == 'MISSED' ||
+        status == 'REJECTED' ||
+        (status == 'CANCELED' && !isMine);
+
+    IconData icon;
+    if (missed) {
+      icon = isMine
+          ? Icons.call_missed_outgoing_rounded
+          : Icons.call_missed_rounded;
+    } else {
+      icon = isMine ? Icons.call_made_rounded : Icons.call_received_rounded;
+    }
+    final iconColor =
+        missed ? const Color(0xFFEF4444) : const Color(0xFF22C55E);
+
+    String sub;
+    if (missed) {
+      sub = isMine ? 'Tidak dijawab' : 'Panggilan tak terjawab';
+    } else {
+      final m = (dur ~/ 60).toString();
+      final s = (dur % 60).toString().padLeft(2, '0');
+      sub = '$time · $m:$s';
+    }
+
+    return Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+        decoration: BoxDecoration(
+          color: isMine ? palette.outgoingBubble : palette.incomingBubble,
+          borderRadius: BorderRadius.circular(16),
+          border: isMine ? null : Border.all(color: palette.cardBorder),
+        ),
+        child: InkWell(
+          onTap: onCallBack,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: iconColor),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Panggilan suara',
+                      style: TextStyle(
+                          color: textColor, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: missed
+                              ? const Color(0xFFEF4444)
+                              : textColor.withValues(alpha: 0.7))),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Icon(Icons.call_rounded, size: 20, color: scheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _deletedBubble(AppPalette palette, Color metaColor, String time) {
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -287,11 +372,19 @@ class MessageBubble extends StatelessWidget {
         case 'STICKER':
           snippet = '${r.content ?? '🙂'} Stiker';
           break;
+        case 'VOICE':
+          snippet = '🎤 Pesan suara';
+          break;
+        case 'CALL':
+          snippet = '📞 Panggilan suara';
+          break;
         default:
           snippet = r.content ?? '';
       }
     }
-    return Container(
+    return GestureDetector(
+      onTap: onQuoteTap == null ? null : () => onQuoteTap!(r.id),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.10),
@@ -334,6 +427,7 @@ class MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -393,6 +487,16 @@ class MessageBubble extends StatelessWidget {
               ),
             ],
           ),
+        );
+      case 'VOICE':
+        final scheme = Theme.of(context).colorScheme;
+        return VoiceMessage(
+          url: message.mediaUrl ?? '',
+          durationSeconds: int.tryParse(message.content ?? '') ?? 0,
+          accent: scheme.primary,
+          trackColor: textColor.withValues(alpha: 0.25),
+          textColor: textColor,
+          seed: message.id.hashCode,
         );
       default:
         if (highlight != null && highlight!.trim().isNotEmpty) {

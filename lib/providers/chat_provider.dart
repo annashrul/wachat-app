@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
@@ -93,6 +94,10 @@ class ChatProvider extends ChangeNotifier {
 
   Set<String> typingFor(String convId) => typingByConv[convId] ?? <String>{};
 
+  /// Total pesan belum dibaca di seluruh percakapan (untuk badge tab Chat).
+  int get totalUnread =>
+      conversations.fold(0, (sum, c) => sum + c.unreadCount);
+
   Conversation? conversationById(String id) {
     for (final c in conversations) {
       if (c.id == id) return c;
@@ -107,6 +112,32 @@ class ChatProvider extends ChangeNotifier {
       _attachListeners();
       _listenersAttached = true;
     }
+    _loadFavorites();
+  }
+
+  // ===== Favorit (disimpan lokal per perangkat) =====
+  static const _favKey = 'favorite_convs';
+  final Set<String> _favorites = {};
+
+  bool isFavorite(String id) => _favorites.contains(id);
+
+  Future<void> _loadFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _favorites
+        ..clear()
+        ..addAll(prefs.getStringList(_favKey) ?? []);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> toggleFavorite(String id) async {
+    if (!_favorites.add(id)) _favorites.remove(id);
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_favKey, _favorites.toList());
+    } catch (_) {}
   }
 
   void _attachListeners() {
@@ -437,9 +468,13 @@ class ChatProvider extends ChangeNotifier {
     required String type,
     required String mediaUrl,
     required String mediaName,
+    String? content,
   }) {
     _addOptimistic(_optimistic(conversationId, type,
-        mediaUrl: mediaUrl, mediaName: mediaName, reply: replyingTo));
+        mediaUrl: mediaUrl,
+        mediaName: mediaName,
+        content: content,
+        reply: replyingTo));
   }
 
   void setTyping(String conversationId, bool isTyping) {

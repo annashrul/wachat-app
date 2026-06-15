@@ -4,12 +4,16 @@ import 'package:provider/provider.dart';
 import '../models/conversation.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/call_provider.dart';
+import '../providers/status_provider.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
 import 'chat_screen.dart';
+import 'status_screen.dart';
+import 'call_history_screen.dart';
 import 'contacts_screen.dart';
 import 'new_chat_screen.dart';
 import 'profile_edit_screen.dart';
@@ -23,7 +27,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _tab = 0;
   bool _searching = false;
+  String _filter = 'all'; // all | unread | favorite | group
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -33,7 +39,11 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       final chat = context.read<ChatProvider>();
-      if (auth.userId != null) chat.init(auth.userId!);
+      if (auth.userId != null) {
+        chat.init(auth.userId!);
+        context.read<CallProvider>().init(auth.userId!);
+        context.read<StatusProvider>().init(auth.userId!);
+      }
       chat.loadConversations();
       // Buka chat jika app dibuka dari tap notifikasi (saat app sebelumnya mati).
       NotificationService.instance.consumePending();
@@ -54,6 +64,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return '📷 Foto';
       case 'FILE':
         return '📎 ${m.mediaName ?? 'File'}';
+      case 'VOICE':
+        return '🎤 Pesan suara';
+      case 'CALL':
+        return '📞 Panggilan suara';
       default:
         return m.content ?? '';
     }
@@ -71,17 +85,90 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final call = context.watch<CallProvider>();
+    final unread = context.watch<ChatProvider>().totalUnread;
+    return Scaffold(
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          _buildChatsTab(context),
+          const StatusScreen(),
+          const CallHistoryScreen(),
+          const ContactsScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) {
+          setState(() => _tab = i);
+          if (i == 2) {
+            final c = context.read<CallProvider>();
+            c.loadCalls();
+            c.markCallsSeen();
+          }
+        },
+        destinations: [
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: unread > 0,
+              label: Text('$unread'),
+              child: const Icon(Icons.chat_bubble_outline_rounded),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: unread > 0,
+              label: Text('$unread'),
+              child: const Icon(Icons.chat_bubble_rounded),
+            ),
+            label: 'Chat',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.donut_large_outlined),
+            selectedIcon: Icon(Icons.donut_large_rounded),
+            label: 'Status',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: call.missedCount > 0,
+              label: Text('${call.missedCount}'),
+              child: const Icon(Icons.call_outlined),
+            ),
+            selectedIcon: const Icon(Icons.call_rounded),
+            label: 'Panggilan',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.people_outline_rounded),
+            selectedIcon: Icon(Icons.people_rounded),
+            label: 'Kontak',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatsTab(BuildContext context) {
     final chat = context.watch<ChatProvider>();
     final auth = context.read<AuthProvider>();
     final myId = auth.userId;
     final scheme = Theme.of(context).colorScheme;
     final palette = AppPalette.of(context);
 
-    final filtered = _query.isEmpty
+    final base = _query.isEmpty
         ? chat.conversations
         : chat.conversations
             .where((c) => c.title.toLowerCase().contains(_query.toLowerCase()))
             .toList();
+    final filtered = base.where((c) {
+      switch (_filter) {
+        case 'unread':
+          return c.unreadCount > 0;
+        case 'favorite':
+          return chat.isFavorite(c.id);
+        case 'group':
+          return c.isGroup;
+        default:
+          return true;
+      }
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -116,19 +203,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 26),
               ),
         actions: [
-          if (!_searching) ...[
+          if (!_searching)
             IconButton(
               icon: const Icon(Icons.search_rounded),
               onPressed: () => setState(() => _searching = true),
             ),
-            IconButton(
-              icon: const Icon(Icons.contacts_rounded),
-              tooltip: 'Kontak',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ContactsScreen()),
-              ),
-            ),
-          ],
           Padding(
             padding: const EdgeInsets.only(right: 12, left: 4),
             child: PopupMenuButton<String>(
@@ -221,9 +300,13 @@ class _HomeScreenState extends State<HomeScreen> {
             if (mounted) _openChat(created);
           }
         },
-        child: const Icon(Icons.edit_rounded),
+        child: const Icon(Icons.add_comment_rounded),
       ),
-      body: RefreshIndicator(
+      body: Column(
+        children: [
+          if (!_searching) _filterChips(palette),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: () => chat.loadConversations(),
         child: chat.loadingConversations && chat.conversations.isEmpty
             ? const Center(child: CircularProgressIndicator())
@@ -233,7 +316,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Text('Tidak ada hasil untuk "$_query"',
                             style: TextStyle(color: palette.muted)),
                       )
-                    : _emptyState(palette))
+                    : _filter != 'all'
+                        ? Center(
+                            child: Text('Tidak ada chat di filter ini',
+                                style: TextStyle(color: palette.muted)),
+                          )
+                        : _emptyState(palette))
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     itemCount: filtered.length,
@@ -348,10 +436,90 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         onTap: () => _openChat(c),
-                        onLongPress: () => _confirmDeleteChat(c),
+                        onLongPress: () => _showChatMenu(c),
                       );
                     },
                   ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChips(AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
+    const filters = [
+      ('all', 'Semua'),
+      ('unread', 'Belum dibaca'),
+      ('favorite', 'Favorit'),
+      ('group', 'Grup'),
+    ];
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        children: [
+          for (final f in filters)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(f.$2),
+                selected: _filter == f.$1,
+                showCheckmark: false,
+                onSelected: (_) => setState(() => _filter = f.$1),
+                labelStyle: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _filter == f.$1 ? scheme.primary : palette.muted,
+                ),
+                selectedColor: scheme.primary.withValues(alpha: 0.15),
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                side: BorderSide(
+                  color: _filter == f.$1 ? scheme.primary : palette.cardBorder,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showChatMenu(Conversation c) {
+    final chat = context.read<ChatProvider>();
+    final fav = chat.isFavorite(c.id);
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(fav ? Icons.star_rounded : Icons.star_outline_rounded),
+              title: Text(fav ? 'Hapus dari favorit' : 'Tambah ke favorit'),
+              onTap: () {
+                Navigator.pop(context);
+                chat.toggleFavorite(c.id);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_rounded,
+                  color: Theme.of(context).colorScheme.error),
+              title: Text('Hapus chat',
+                  style:
+                      TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteChat(c);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,0 +1,12 @@
+# Konteks image web hanya butuh build/web + nginx.conf.
+.git
+.dart_tool
+android
+ios
+linux
+macos
+windows
+test
+.idea
+*.iml
+build/app

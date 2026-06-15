@@ -1,0 +1,47 @@
+import 'package:dio/dio.dart';
+import '../models/status.dart';
+import 'api_client.dart';
+
+class StatusService {
+  final _api = ApiClient.instance;
+
+  Future<StatusFeed> getFeed() async {
+    final res = await _api.dio.get('/status');
+    return StatusFeed.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<void> create({
+    required String type,
+    String? mediaUrl,
+    String? text,
+    String? bgColor,
+    String? caption,
+  }) async {
+    await _api.dio.post('/status', data: {
+      'type': type,
+      'mediaUrl': ?mediaUrl,
+      'text': ?text,
+      'bgColor': ?bgColor,
+      'caption': ?caption,
+    });
+  }
+
+  Future<void> markViewed(String id) async {
+    try {
+      await _api.dio.post('/status/$id/view');
+    } catch (_) {}
+  }
+
+  Future<void> delete(String id) async {
+    await _api.dio.delete('/status/$id');
+  }
+
+  /// Upload gambar status (pakai endpoint /upload yang sama).
+  Future<String> uploadImage(List<int> bytes, String filename) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _api.dio.post('/upload', data: form);
+    return (res.data as Map<String, dynamic>)['url'] as String;
+  }
+}

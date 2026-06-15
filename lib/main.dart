@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/call_provider.dart';
+import 'providers/status_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
@@ -21,6 +23,8 @@ class WaChatApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..bootstrap()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => CallProvider()),
+        ChangeNotifierProvider(create: (_) => StatusProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
       ],
       child: Consumer<SettingsProvider>(
