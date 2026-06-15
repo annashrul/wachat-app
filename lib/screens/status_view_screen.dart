@@ -290,6 +290,21 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     });
   }
 
+  Widget _navButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(6),
+        decoration: const BoxDecoration(
+          color: Colors.black38,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 30),
+      ),
+    );
+  }
+
   Widget _content(StatusItem s) {
     switch (s.type) {
       case 'TEXT':
@@ -355,6 +370,21 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         child: Stack(
           children: [
             Positioned.fill(child: Center(child: _content(s))),
+            // Tombol navigasi prev/next.
+            if (!(_s == 0 && _i == 0))
+              Positioned(
+                left: 4,
+                top: 0,
+                bottom: 0,
+                child: Center(child: _navButton(Icons.chevron_left_rounded, _prev)),
+              ),
+            Positioned(
+              right: 4,
+              top: 0,
+              bottom: 0,
+              child:
+                  Center(child: _navButton(Icons.chevron_right_rounded, _next)),
+            ),
             SafeArea(
               child: Column(
                 children: [
