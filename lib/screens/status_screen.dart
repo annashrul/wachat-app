@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:pro_image_editor/pro_image_editor.dart';
 import '../models/status.dart';
 import 'status_camera_screen.dart';
+import 'status_photo_editor_screen.dart';
 import 'status_finalize_screen.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -48,13 +48,7 @@ class _StatusScreenState extends State<StatusScreen> {
   Future<void> _editImageThenFinalize(Uint8List bytes) async {
     final edited = await Navigator.of(context).push<Uint8List>(
       MaterialPageRoute(
-        builder: (_) => ProImageEditor.memory(
-          bytes,
-          callbacks: ProImageEditorCallbacks(
-            onImageEditingComplete: (out) async =>
-                Navigator.of(context).pop(out),
-          ),
-        ),
+        builder: (_) => StatusPhotoEditorScreen(source: bytes),
       ),
     );
     if (edited == null || !mounted) return;
