@@ -13,6 +13,7 @@ import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
 import 'chat_screen.dart';
 import 'status_screen.dart';
+import 'status_view_screen.dart';
 import 'call_history_screen.dart';
 import 'contacts_screen.dart';
 import 'new_chat_screen.dart';
@@ -147,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildChatsTab(BuildContext context) {
     final chat = context.watch<ChatProvider>();
+    final status = context.watch<StatusProvider>();
     final auth = context.read<AuthProvider>();
     final myId = auth.userId;
     final scheme = Theme.of(context).colorScheme;
@@ -342,11 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           horizontal: 18,
                           vertical: 6,
                         ),
-                        leading: Avatar(
-                          url: c.avatarUrl,
-                          name: c.title,
-                          radius: 27,
-                        ),
+                        leading: _chatLeading(c, status, scheme, palette),
                         title: Text(
                           c.title,
                           maxLines: 1,
@@ -549,6 +547,41 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  /// Avatar di daftar chat + cincin status (hijau=belum dilihat, abu=sudah).
+  /// Ketuk avatar yang bercincin → buka status orang itu.
+  Widget _chatLeading(Conversation c, StatusProvider status,
+      ColorScheme scheme, AppPalette palette) {
+    String? ring;
+    final peer = c.peer;
+    if (!c.isGroup && peer != null) ring = status.ringState(peer.id);
+    Color? ringColor;
+    if (ring == 'unseen') {
+      ringColor = scheme.primary;
+    } else if (ring == 'seen') {
+      ringColor = palette.muted.withValues(alpha: 0.5);
+    }
+    final avatar =
+        Avatar(url: c.avatarUrl, name: c.title, radius: 27, ringColor: ringColor);
+    if (ring != null && peer != null) {
+      return GestureDetector(onTap: () => _openPeerStatus(peer.id), child: avatar);
+    }
+    return avatar;
+  }
+
+  void _openPeerStatus(String userId) {
+    final entry = context.read<StatusProvider>().entryFor(userId);
+    if (entry == null) return;
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => StatusViewScreen(
+            stories: [StatusStory(user: entry.user, statuses: entry.statuses)],
+          ),
+        ))
+        .then((_) {
+      if (mounted) context.read<StatusProvider>().loadFeed();
+    });
   }
 
   void _openChat(Conversation c) {

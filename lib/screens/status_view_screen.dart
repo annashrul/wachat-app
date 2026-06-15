@@ -7,15 +7,21 @@ import '../providers/status_provider.dart';
 import '../services/status_service.dart';
 import '../widgets/avatar.dart';
 
-class StatusViewScreen extends StatefulWidget {
+/// Satu "cerita" status milik seorang user.
+class StatusStory {
   final AppUser user;
   final List<StatusItem> statuses;
   final bool isMine;
+  StatusStory({required this.user, required this.statuses, this.isMine = false});
+}
+
+class StatusViewScreen extends StatefulWidget {
+  final List<StatusStory> stories;
+  final int startIndex;
   const StatusViewScreen({
     super.key,
-    required this.user,
-    required this.statuses,
-    this.isMine = false,
+    required this.stories,
+    this.startIndex = 0,
   });
 
   @override
@@ -26,14 +32,19 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     with SingleTickerProviderStateMixin {
   final _service = StatusService();
   late final AnimationController _ctrl;
-  int _i = 0;
+  late int _s; // index cerita (user)
+  int _i = 0; // index status dalam cerita
 
-  static const _imageDuration = Duration(seconds: 5);
+  static const _dur = Duration(seconds: 5);
+
+  StatusStory get _story => widget.stories[_s];
+  StatusItem get _status => _story.statuses[_i];
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: _imageDuration)
+    _s = widget.startIndex;
+    _ctrl = AnimationController(vsync: this, duration: _dur)
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) _next();
       })
@@ -42,16 +53,21 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   }
 
   void _start() {
-    if (_i >= widget.statuses.length) return;
-    if (!widget.isMine) _service.markViewed(widget.statuses[_i].id);
+    if (!_story.isMine) _service.markViewed(_status.id);
     _ctrl
       ..reset()
       ..forward();
   }
 
   void _next() {
-    if (_i < widget.statuses.length - 1) {
+    if (_i < _story.statuses.length - 1) {
       setState(() => _i++);
+      _start();
+    } else if (_s < widget.stories.length - 1) {
+      setState(() {
+        _s++;
+        _i = 0;
+      });
       _start();
     } else {
       Navigator.of(context).pop();
@@ -62,6 +78,14 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     if (_i > 0) {
       setState(() => _i--);
       _start();
+    } else if (_s > 0) {
+      setState(() {
+        _s--;
+        _i = _story.statuses.length - 1;
+      });
+      _start();
+    } else {
+      _start(); // ulang dari awal
     }
   }
 
@@ -86,17 +110,67 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   }
 
   Future<void> _deleteCurrent() async {
-    final s = widget.statuses[_i];
+    final id = _status.id;
     try {
-      await context.read<StatusProvider>().deleteStatus(s.id);
+      await context.read<StatusProvider>().deleteStatus(id);
     } catch (_) {}
     if (mounted) Navigator.of(context).pop(true);
   }
 
+  void _showViewers() {
+    _ctrl.stop(); // jeda saat melihat daftar
+    final id = _status.id;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => FutureBuilder<List<AppUser>>(
+        future: _service.getViewers(id),
+        builder: (_, snap) {
+          final viewers = snap.data ?? [];
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()));
+          }
+          if (viewers.isEmpty) {
+            return const SizedBox(
+              height: 160,
+              child: Center(child: Text('Belum ada yang melihat')),
+            );
+          }
+          return ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.visibility_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Dilihat oleh ${viewers.length}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              ...viewers.map((u) => ListTile(
+                    leading: Avatar(url: u.avatarUrl, name: u.displayName, radius: 20),
+                    title: Text(u.displayName),
+                  )),
+            ],
+          );
+        },
+      ),
+    ).whenComplete(() {
+      if (mounted) _ctrl.forward(); // lanjutkan setelah sheet ditutup
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = widget.statuses[_i];
+    final s = _status;
     final isText = s.type == 'TEXT';
+    final liveCount =
+        context.watch<StatusProvider>().viewCountById(s.id) ?? s.viewCount;
     return Scaffold(
       backgroundColor: isText ? _parseColor(s.bgColor) : Colors.black,
       body: GestureDetector(
@@ -110,7 +184,6 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         },
         child: Stack(
           children: [
-            // Konten
             Positioned.fill(
               child: Center(
                 child: isText
@@ -130,16 +203,13 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                         imageUrl: s.mediaUrl ?? '',
                         fit: BoxFit.contain,
                         placeholder: (_, _) => const Center(
-                            child: CircularProgressIndicator(
-                                color: Colors.white)),
-                        errorWidget: (_, _, _) => const Icon(
-                            Icons.broken_image,
-                            color: Colors.white54,
-                            size: 48),
+                            child:
+                                CircularProgressIndicator(color: Colors.white)),
+                        errorWidget: (_, _, _) => const Icon(Icons.broken_image,
+                            color: Colors.white54, size: 48),
                       ),
               ),
             ),
-            // Header: progress + info
             SafeArea(
               child: Column(
                 children: [
@@ -148,7 +218,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     child: Row(
                       children: [
-                        for (var k = 0; k < widget.statuses.length; k++)
+                        for (var k = 0; k < _story.statuses.length; k++)
                           Expanded(
                             child: Padding(
                               padding:
@@ -161,8 +231,8 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                                         : 0.0,
                                 minHeight: 2.5,
                                 backgroundColor: Colors.white38,
-                                valueColor: const AlwaysStoppedAnimation(
-                                    Colors.white),
+                                valueColor:
+                                    const AlwaysStoppedAnimation(Colors.white),
                               ),
                             ),
                           ),
@@ -171,26 +241,25 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                   ),
                   ListTile(
                     leading: Avatar(
-                        url: widget.user.avatarUrl,
-                        name: widget.user.displayName,
+                        url: _story.user.avatarUrl,
+                        name: _story.user.displayName,
                         radius: 18),
                     title: Text(
-                      widget.isMine ? 'Status saya' : widget.user.displayName,
+                      _story.isMine ? 'Status saya' : _story.user.displayName,
                       style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w700),
                     ),
                     subtitle: Text(_ago(s.createdAt),
                         style: const TextStyle(color: Colors.white70)),
                     trailing: IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: Colors.white),
+                      icon:
+                          const Icon(Icons.close_rounded, color: Colors.white),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ),
                 ],
               ),
             ),
-            // Caption + (untuk status sendiri) jumlah dilihat & hapus
             Positioned(
               left: 0,
               right: 0,
@@ -208,20 +277,29 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white)),
                         ),
-                      if (widget.isMine)
+                      if (_story.isMine)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.visibility_rounded,
-                                    color: Colors.white70, size: 18),
-                                const SizedBox(width: 6),
-                                Text(
-                                    '${context.watch<StatusProvider>().viewCountById(s.id) ?? s.viewCount} dilihat',
-                                    style: const TextStyle(
-                                        color: Colors.white70)),
-                              ],
+                            // Ketuk untuk melihat siapa saja yang melihat.
+                            InkWell(
+                              onTap: _showViewers,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 6),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.visibility_rounded,
+                                        color: Colors.white70, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text('$liveCount dilihat',
+                                        style: const TextStyle(
+                                            color: Colors.white70)),
+                                  ],
+                                ),
+                              ),
                             ),
                             TextButton.icon(
                               onPressed: _deleteCurrent,

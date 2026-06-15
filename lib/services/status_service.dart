@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/status.dart';
+import '../models/user.dart';
 import 'api_client.dart';
 
 class StatusService {
@@ -8,6 +9,14 @@ class StatusService {
   Future<StatusFeed> getFeed() async {
     final res = await _api.dio.get('/status');
     return StatusFeed.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  /// Daftar user yang melihat sebuah status (hanya pemilik).
+  Future<List<AppUser>> getViewers(String statusId) async {
+    final res = await _api.dio.get('/status/$statusId/viewers');
+    return (res.data as List)
+        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> create({

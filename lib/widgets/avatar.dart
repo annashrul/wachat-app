@@ -7,7 +7,15 @@ class Avatar extends StatelessWidget {
   final String? url;
   final String name;
   final double radius;
-  const Avatar({super.key, this.url, required this.name, this.radius = 24});
+  // Cincin status (ala WhatsApp). null = tanpa cincin.
+  final Color? ringColor;
+  const Avatar({
+    super.key,
+    this.url,
+    required this.name,
+    this.radius = 24,
+    this.ringColor,
+  });
 
   static const _colors = <Color>[
     Color(0xFF2563EB), // blue
@@ -32,30 +40,43 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = radius * 2;
+    Widget inner;
     if (url != null && url!.isNotEmpty) {
-      return CircleAvatar(
+      inner = CircleAvatar(
         radius: radius,
         backgroundColor: Colors.black12,
         backgroundImage: CachedNetworkImageProvider(url!),
       );
+    } else {
+      final initial =
+          name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+      inner = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _colorFor(name),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: radius * 0.82,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
     }
-    final initial = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+    if (ringColor == null) return inner;
+    // Cincin + sedikit jarak (gap putih) ala WhatsApp.
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.all(2.5),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: _colorFor(name),
+        border: Border.all(color: ringColor!, width: 2.2),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        initial,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: radius * 0.82,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      child: inner,
     );
   }
 }

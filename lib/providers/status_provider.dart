@@ -58,6 +58,21 @@ class StatusProvider extends ChangeNotifier {
     return i >= 0 ? feed.mine[i].viewCount : null;
   }
 
+  /// Status cincin avatar untuk [userId]: 'unseen' | 'seen' | null (tak ada).
+  String? ringState(String userId) {
+    for (final e in feed.others) {
+      if (e.user.id == userId) return e.hasUnseen ? 'unseen' : 'seen';
+    }
+    return null;
+  }
+
+  StatusEntry? entryFor(String userId) {
+    for (final e in feed.others) {
+      if (e.user.id == userId) return e;
+    }
+    return null;
+  }
+
   Future<void> create({
     required String type,
     String? mediaUrl,

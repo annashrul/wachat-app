@@ -50,8 +50,9 @@ class _StatusScreenState extends State<StatusScreen> {
     }
     Navigator.of(context)
         .push(MaterialPageRoute(
-          builder: (_) =>
-              StatusViewScreen(user: me, statuses: mine, isMine: true),
+          builder: (_) => StatusViewScreen(
+            stories: [StatusStory(user: me, statuses: mine, isMine: true)],
+          ),
         ))
         .then((_) {
       if (mounted) context.read<StatusProvider>().loadFeed();
@@ -59,10 +60,17 @@ class _StatusScreenState extends State<StatusScreen> {
   }
 
   void _viewEntry(StatusEntry e) {
+    final others = context.read<StatusProvider>().feed.others;
+    final stories = others
+        .map((x) => StatusStory(user: x.user, statuses: x.statuses))
+        .toList();
+    final start = others.indexWhere((x) => x.user.id == e.user.id);
     Navigator.of(context)
         .push(MaterialPageRoute(
-          builder: (_) =>
-              StatusViewScreen(user: e.user, statuses: e.statuses),
+          builder: (_) => StatusViewScreen(
+            stories: stories,
+            startIndex: start < 0 ? 0 : start,
+          ),
         ))
         .then((_) {
       if (mounted) context.read<StatusProvider>().loadFeed();
