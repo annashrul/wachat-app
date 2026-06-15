@@ -200,6 +200,17 @@ class ChatProvider extends ChangeNotifier {
     _socket.on('message:read', (data) {
       final map = Map<String, dynamic>.from(data as Map);
       _applyReceipt(map, read: true);
+      // Sinkron lintas perangkat: kalau yang membaca adalah SAYA (di perangkat
+      // lain, mis. web ↔ apk), reset badge unread percakapan ini di sini juga.
+      if (map['userId'] == _myUserId) {
+        final convId = map['conversationId'] as String?;
+        final c = convId == null ? null : conversationById(convId);
+        if (c != null && c.unreadCount != 0) {
+          c.unreadCount = 0;
+          _syncWebBadge();
+          notifyListeners();
+        }
+      }
     });
     _socket.on('message:delivered', (data) {
       final map = Map<String, dynamic>.from(data as Map);
