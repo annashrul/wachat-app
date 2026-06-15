@@ -1,0 +1,412 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/message.dart';
+import '../theme.dart';
+import 'status_tick.dart';
+import 'link_preview.dart';
+
+final _urlReg = RegExp(r'(https?:\/\/[^\s]+)');
+
+class MessageBubble extends StatelessWidget {
+  final Message message;
+  final bool isMine;
+  final bool showSender; // tampilkan nama pengirim (grup)
+  final MessageStatus? status; // centang (untuk pesan sendiri)
+  final String? highlight; // sorot teks saat pencarian
+
+  const MessageBubble({
+    super.key,
+    required this.message,
+    required this.isMine,
+    this.showSender = false,
+    this.status,
+    this.highlight,
+  });
+
+  Widget _highlightedText(Color textColor, String query) {
+    final text = message.content ?? '';
+    final lower = text.toLowerCase();
+    final q = query.toLowerCase();
+    final spans = <InlineSpan>[];
+    var start = 0;
+    var idx = lower.indexOf(q, start);
+    while (idx >= 0) {
+      if (idx > start) spans.add(TextSpan(text: text.substring(start, idx)));
+      spans.add(TextSpan(
+        text: text.substring(idx, idx + q.length),
+        style: const TextStyle(
+          backgroundColor: Color(0xFFFFE08A),
+          color: Color(0xFF1A1A1A),
+          fontWeight: FontWeight.w700,
+        ),
+      ));
+      start = idx + q.length;
+      idx = lower.indexOf(q, start);
+    }
+    if (start < text.length) spans.add(TextSpan(text: text.substring(start)));
+    return Text.rich(
+      TextSpan(
+        style: TextStyle(fontSize: 15, height: 1.3, color: textColor),
+        children: spans,
+      ),
+    );
+  }
+
+  String? get _firstUrl =>
+      message.type == 'TEXT' && message.content != null && !message.deleted
+          ? _urlReg.firstMatch(message.content!)?.group(0)
+          : null;
+
+  Widget _linkifiedText(BuildContext context, Color textColor) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = message.content ?? '';
+    final spans = <InlineSpan>[];
+    var last = 0;
+    for (final m in _urlReg.allMatches(text)) {
+      if (m.start > last) {
+        spans.add(TextSpan(text: text.substring(last, m.start)));
+      }
+      final url = m.group(0)!;
+      spans.add(
+        TextSpan(
+          text: url,
+          style: TextStyle(
+            color: scheme.primary,
+            decoration: TextDecoration.underline,
+            decorationColor: scheme.primary,
+          ),
+          recognizer: TapGestureRecognizer()..onTap = () => _open(url),
+        ),
+      );
+      last = m.end;
+    }
+    if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
+    return Text.rich(
+      TextSpan(
+        style: TextStyle(fontSize: 15, height: 1.3, color: textColor),
+        children: spans,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final time = DateFormat('HH:mm').format(message.createdAt);
+    // Warna jam/centang menyesuaikan latar gelembung.
+    final metaColor =
+        isMine ? palette.outgoingText.withValues(alpha: 0.55) : palette.muted;
+
+    // Pesan yang sudah dihapus.
+    if (message.deleted) {
+      return _deletedBubble(palette, metaColor, time);
+    }
+
+    // Stiker: tampil sebagai emoji besar tanpa gelembung.
+    if (message.type == 'STICKER') {
+      return Align(
+        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: Column(
+            crossAxisAlignment:
+                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showSender && !isMine)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2, left: 2),
+                  child: Text(
+                    message.senderName ?? 'Pengguna',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              Text(
+                message.content ?? '🙂',
+                style: const TextStyle(fontSize: 64),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2, left: 2, right: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      time,
+                      style: TextStyle(fontSize: 10.5, color: palette.muted),
+                    ),
+                    if (isMine && status != null) ...[
+                      const SizedBox(width: 4),
+                      statusTick(status!,
+                          normal: palette.muted, read: scheme.primary),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    const radius = Radius.circular(18);
+
+    return Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.76,
+        ),
+        decoration: BoxDecoration(
+          color: isMine ? palette.outgoingBubble : palette.incomingBubble,
+          borderRadius: BorderRadius.only(
+            topLeft: radius,
+            topRight: radius,
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+          border: isMine
+              ? null
+              : Border.all(color: palette.cardBorder, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showSender && !isMine)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  message.senderName ?? 'Pengguna',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            if (message.forwarded)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shortcut_rounded, size: 14, color: metaColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Diteruskan',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: metaColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (message.replyTo != null) _replyQuote(context, palette),
+            if (_firstUrl != null)
+              LinkPreviewCard(url: _firstUrl!, mine: isMine),
+            _buildContent(context, palette),
+            const SizedBox(height: 3),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  time,
+                  style: TextStyle(fontSize: 10.5, color: metaColor),
+                ),
+                if (isMine && status != null) ...[
+                  const SizedBox(width: 4),
+                  statusTick(status!, normal: metaColor, read: scheme.primary),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _deletedBubble(AppPalette palette, Color metaColor, String time) {
+    return Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: BoxDecoration(
+          color: isMine ? palette.outgoingBubble : palette.incomingBubble,
+          borderRadius: BorderRadius.circular(14),
+          border: isMine ? null : Border.all(color: palette.cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.block_rounded, size: 15, color: metaColor),
+            const SizedBox(width: 6),
+            Text(
+              'Pesan ini dihapus',
+              style: TextStyle(
+                fontStyle: FontStyle.italic,
+                color: metaColor,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(time, style: TextStyle(fontSize: 10.5, color: metaColor)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _replyQuote(BuildContext context, AppPalette palette) {
+    final r = message.replyTo!;
+    final scheme = Theme.of(context).colorScheme;
+    final textColor = isMine ? palette.outgoingText : palette.incomingText;
+    String snippet;
+    if (r.deleted) {
+      snippet = 'Pesan dihapus';
+    } else {
+      switch (r.type) {
+        case 'IMAGE':
+          snippet = '📷 Foto';
+          break;
+        case 'FILE':
+          snippet = '📎 ${r.mediaName ?? 'File'}';
+          break;
+        case 'STICKER':
+          snippet = '${r.content ?? '🙂'} Stiker';
+          break;
+        default:
+          snippet = r.content ?? '';
+      }
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 3, color: scheme.primary),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      r.senderName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: scheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      snippet,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: textColor.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, AppPalette palette) {
+    final textColor = isMine ? palette.outgoingText : palette.incomingText;
+    switch (message.type) {
+      case 'IMAGE':
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: GestureDetector(
+            onTap: () => _open(message.mediaUrl),
+            child: CachedNetworkImage(
+              imageUrl: message.mediaUrl ?? '',
+              width: 230,
+              fit: BoxFit.cover,
+              placeholder: (_, _) => Container(
+                width: 230,
+                height: 170,
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+              errorWidget: (_, _, _) => const Icon(Icons.broken_image),
+            ),
+          ),
+        );
+      case 'FILE':
+        return InkWell(
+          onTap: () => _open(message.mediaUrl),
+          borderRadius: BorderRadius.circular(10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isMine ? Colors.white : textColor).withValues(
+                    alpha: 0.15,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.insert_drive_file_rounded,
+                  color: textColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  message.mediaName ?? 'File',
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      default:
+        if (highlight != null && highlight!.trim().isNotEmpty) {
+          return _highlightedText(textColor, highlight!.trim());
+        }
+        return _linkifiedText(context, textColor);
+    }
+  }
+
+  Future<void> _open(String? url) async {
+    if (url == null) return;
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+}

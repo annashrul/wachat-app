@@ -1,0 +1,115 @@
+import 'package:dio/dio.dart';
+import '../models/conversation.dart';
+import '../models/message.dart';
+import '../models/user.dart';
+import 'api_client.dart';
+
+class ChatService {
+  final _api = ApiClient.instance;
+
+  Future<List<Conversation>> getConversations() async {
+    final res = await _api.dio.get('/conversations');
+    return (res.data as List)
+        .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Conversation> createDirect(String otherUserId) async {
+    final res = await _api.dio.post('/conversations', data: {
+      'type': 'DIRECT',
+      'memberIds': [otherUserId],
+    });
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> createGroup(
+    String name,
+    List<String> memberIds,
+  ) async {
+    final res = await _api.dio.post('/conversations', data: {
+      'type': 'GROUP',
+      'name': name,
+      'memberIds': memberIds,
+    });
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<List<Message>> getMessages(String conversationId,
+      {String? before}) async {
+    final res = await _api.dio.get(
+      '/conversations/$conversationId/messages',
+      queryParameters: {'before': ?before},
+    );
+    return (res.data as List)
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<Message>> searchMessages(
+      String conversationId, String q) async {
+    final res = await _api.dio.get(
+      '/conversations/$conversationId/messages/search',
+      queryParameters: {'q': q},
+    );
+    return (res.data as List)
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> markRead(String conversationId) async {
+    await _api.dio.post('/conversations/$conversationId/read');
+  }
+
+  Future<void> deleteConversation(String conversationId) async {
+    await _api.dio.delete('/conversations/$conversationId');
+  }
+
+  Future<List<AppUser>> searchUsers(String query) async {
+    final res = await _api.dio.get('/users/search',
+        queryParameters: {'q': query});
+    return (res.data as List)
+        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Kontak tersimpan: [{id, alias, user}].
+  Future<List<({String id, String? alias, AppUser user})>> getContacts() async {
+    final res = await _api.dio.get('/contacts');
+    return (res.data as List).map((e) {
+      final m = e as Map<String, dynamic>;
+      return (
+        id: m['id'] as String,
+        alias: m['alias'] as String?,
+        user: AppUser.fromJson(m['user'] as Map<String, dynamic>),
+      );
+    }).toList();
+  }
+
+  Future<void> addContact(String userId, {String? alias}) async {
+    await _api.dio.post('/contacts',
+        data: {'userId': userId, 'alias': ?alias});
+  }
+
+  Future<void> deleteContact(String contactId) async {
+    await _api.dio.delete('/contacts/$contactId');
+  }
+
+  Future<Map<String, dynamic>> linkPreview(String url) async {
+    final res = await _api.dio.get('/link-preview',
+        queryParameters: {'url': url});
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  /// Upload file ke backend (Supabase Storage), kembalikan url + nama.
+  Future<({String url, String name})> uploadFile(
+    List<int> bytes,
+    String filename,
+  ) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _api.dio.post('/upload', data: form);
+    final data = res.data as Map<String, dynamic>;
+    return (url: data['url'] as String, name: data['name'] as String);
+  }
+}
