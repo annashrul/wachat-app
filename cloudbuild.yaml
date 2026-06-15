@@ -20,12 +20,12 @@ steps:
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
       - .
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
   # 3) Deploy ke Cloud Run.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -34,7 +34,7 @@ steps:
       - deploy
       - ${_SERVICE}
       - --image
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
       - --region
       - ${_REGION}
       - --allow-unauthenticated
@@ -42,7 +42,7 @@ steps:
       - '8080'
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
