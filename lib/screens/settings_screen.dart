@@ -6,6 +6,11 @@ import '../providers/settings_provider.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'profile_edit_screen.dart';
+import 'settings/account_settings_screen.dart';
+import 'settings/privacy_settings_screen.dart';
+import 'settings/notification_settings_screen.dart';
+import 'settings/help_settings_screen.dart';
+import 'settings/about_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -65,50 +70,55 @@ class SettingsScreen extends StatelessWidget {
           Divider(height: 1, color: palette.cardBorder),
           const SizedBox(height: 8),
 
+          // 1. Akun
           _item(context, Icons.key_rounded, 'Akun',
-              'Nomor: ${user?.phone ?? '-'}', () {
-            _info(context, 'Akun', 'Nomor telepon: ${user?.phone ?? '-'}');
+              'Ganti password, hapus akun', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const AccountSettingsScreen()),
+            );
           }),
+
+          // 2. Privasi
           _item(context, Icons.lock_rounded, 'Privasi',
-              'Terakhir dilihat, blokir', () {
-            _soon(context);
+              'Penonton status, blokir, terakhir dilihat', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const PrivacySettingsScreen()),
+            );
           }),
+
+          // 3. Notifikasi
+          _item(context, Icons.notifications_rounded, 'Notifikasi',
+              'Pesan, grup, panggilan, nada', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen()),
+            );
+          }),
+
+          // Chat / tema (tetap dipertahankan).
           _item(context, Icons.chat_rounded, 'Chat',
               'Tema: ${settings.themeLabel}', () {
             _chooseTheme(context, settings);
           }),
-          _item(context, Icons.notifications_rounded, 'Notifikasi',
-              'Nada, getaran', () {
-            _soon(context);
-          }),
-          _item(context, Icons.data_usage_rounded, 'Penyimpanan & data',
-              'Pemakaian jaringan', () {
-            _soon(context);
-          }),
+
+          // 4. Bantuan
           _item(context, Icons.help_rounded, 'Bantuan',
-              'Pusat bantuan, tentang aplikasi', () {
-            showAboutDialog(
-              context: context,
-              applicationName: 'WAChat',
-              applicationVersion: '1.0.0',
-              applicationIcon: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.chat_bubble_rounded,
-                    color: Colors.white),
-              ),
-              children: const [
-                Text('Aplikasi chat real-time dibuat dengan Flutter & NestJS.'),
-              ],
+              'Pusat bantuan, hubungi kami, legal', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HelpSettingsScreen()),
             );
           }),
-          _item(context, Icons.group_add_rounded, 'Undang teman', '', () {
-            _soon(context);
+
+          // 5. Tentang
+          _item(context, Icons.info_rounded, 'Tentang',
+              'Versi aplikasi & lisensi', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutSettingsScreen()),
+            );
           }),
+
           const SizedBox(height: 8),
           Divider(height: 1, color: palette.cardBorder),
           ListTile(
@@ -161,29 +171,8 @@ class SettingsScreen extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: palette.muted, fontSize: 12.5)),
+      trailing: Icon(Icons.chevron_right_rounded, color: palette.muted),
       onTap: onTap,
-    );
-  }
-
-  void _soon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Segera hadir')),
-    );
-  }
-
-  void _info(BuildContext context, String title, String body) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tutup'),
-          ),
-        ],
-      ),
     );
   }
 

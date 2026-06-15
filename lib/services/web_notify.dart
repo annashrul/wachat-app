@@ -1,0 +1,2 @@
+// Memilih implementasi sesuai platform: web pakai dart:html, lainnya no-op.
+export 'web_notify_stub.dart' if (dart.library.html) 'web_notify_web.dart';

@@ -44,6 +44,20 @@ class AuthService {
     return AppUser.fromJson(res.data as Map<String, dynamic>);
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _api.dio.post('/auth/change-password', data: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+  }
+
+  Future<void> deleteAccount(String password) async {
+    await _api.dio.delete('/auth/me', data: {'password': password});
+  }
+
   Future<AuthResult> _handle(Map<String, dynamic> data) async {
     final token = data['accessToken'] as String;
     await _api.setToken(token);

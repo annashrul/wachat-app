@@ -77,6 +77,27 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _auth.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  /// Hapus akun permanen di server lalu bersihkan sesi lokal.
+  Future<void> deleteAccount(String password) async {
+    await _auth.deleteAccount(password);
+    await NotificationService.instance.unregister();
+    _socket.disconnect();
+    await _auth.logout();
+    user = null;
+    status = AuthStatus.unauthenticated;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     await NotificationService.instance.unregister();
     _socket.disconnect();

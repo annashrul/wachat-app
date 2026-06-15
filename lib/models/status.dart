@@ -4,8 +4,9 @@ import 'user.dart';
 class StatusItem {
   final String id;
   final String userId;
-  final String type; // IMAGE | TEXT
+  final String type; // IMAGE | TEXT | VIDEO | AUDIO
   final String? mediaUrl;
+  final String? musicUrl; // audio latar untuk status gambar
   final String? text;
   final String? bgColor;
   final String? caption;
@@ -21,6 +22,7 @@ class StatusItem {
     required this.viewCount,
     required this.createdAt,
     this.mediaUrl,
+    this.musicUrl,
     this.text,
     this.bgColor,
     this.caption,
@@ -31,6 +33,7 @@ class StatusItem {
         userId: userId,
         type: type,
         mediaUrl: mediaUrl,
+        musicUrl: musicUrl,
         text: text,
         bgColor: bgColor,
         caption: caption,
@@ -45,6 +48,7 @@ class StatusItem {
       userId: j['userId'] as String,
       type: j['type'] as String? ?? 'IMAGE',
       mediaUrl: j['mediaUrl'] as String?,
+      musicUrl: j['musicUrl'] as String?,
       text: j['text'] as String?,
       bgColor: j['bgColor'] as String?,
       caption: j['caption'] as String?,

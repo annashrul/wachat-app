@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:pro_image_editor/pro_image_editor.dart';
 import '../models/status.dart';
+import 'status_camera_screen.dart';
+import 'status_finalize_screen.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/status_provider.dart';
@@ -28,14 +31,39 @@ class _StatusScreenState extends State<StatusScreen> {
     });
   }
 
-  /// Pilih banyak gambar/video sekaligus.
-  Future<void> _addMedia() async {
-    final picked = await ImagePicker().pickMultipleMedia();
-    if (picked.isEmpty || !mounted) return;
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => StatusComposeScreen(media: picked)),
+  /// Kamera-pertama (HP) atau pilih file (web) → editor → finalisasi.
+  Future<void> _openCamera() async {
+    if (kIsWeb) {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (x == null || !mounted) return;
+      await _editImageThenFinalize(await x.readAsBytes());
+    } else {
+      final ok = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const StatusCameraScreen()),
+      );
+      if (ok == true && mounted) context.read<StatusProvider>().loadFeed();
+    }
+  }
+
+  Future<void> _editImageThenFinalize(Uint8List bytes) async {
+    final edited = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        builder: (_) => ProImageEditor.memory(
+          bytes,
+          callbacks: ProImageEditorCallbacks(
+            onImageEditingComplete: (out) async =>
+                Navigator.of(context).pop(out),
+          ),
+        ),
+      ),
     );
-    if (mounted) context.read<StatusProvider>().loadFeed();
+    if (edited == null || !mounted) return;
+    final sent = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StatusFinalizeScreen(imageBytes: edited),
+      ),
+    );
+    if (sent == true && mounted) context.read<StatusProvider>().loadFeed();
   }
 
   /// Pilih file audio (musik).
@@ -68,7 +96,7 @@ class _StatusScreenState extends State<StatusScreen> {
 
   void _viewMine(AppUser me, List<StatusItem> mine) {
     if (mine.isEmpty) {
-      _addMedia();
+      _openCamera();
       return;
     }
     Navigator.of(context)
@@ -145,8 +173,8 @@ class _StatusScreenState extends State<StatusScreen> {
           const SizedBox(height: 12),
           FloatingActionButton(
             heroTag: 'status_cam',
-            tooltip: 'Foto/Video',
-            onPressed: _addMedia,
+            tooltip: 'Kamera',
+            onPressed: _openCamera,
             child: const Icon(Icons.photo_camera_rounded),
           ),
         ],

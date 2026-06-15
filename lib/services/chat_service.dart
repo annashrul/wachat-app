@@ -98,6 +98,14 @@ class ChatService {
     await _api.dio.post('/contacts/block', data: {'userId': userId});
   }
 
+  /// Daftar pengguna yang sedang diblokir.
+  Future<List<AppUser>> blockedUsers() async {
+    final res = await _api.dio.get('/contacts/blocked');
+    return (res.data as List)
+        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> unblockUser(String userId) async {
     await _api.dio.delete('/contacts/block/$userId');
   }

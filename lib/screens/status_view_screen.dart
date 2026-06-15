@@ -77,16 +77,26 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     final s = _status;
     if (!_story.isMine) _service.markViewed(s.id);
 
+    final hasMusic = s.musicUrl != null && s.musicUrl!.isNotEmpty;
     if (s.type == 'VIDEO') {
       await _startVideo(s);
     } else if (s.type == 'AUDIO') {
-      await _startAudio(s);
+      await _startAudio(s.mediaUrl);
+    } else if (s.type == 'IMAGE' && hasMusic) {
+      setState(() {});
+      await _startAudio(s.musicUrl); // foto + musik latar
     } else {
       setState(() {});
       _ctrl
         ..reset()
         ..forward();
     }
+  }
+
+  bool get _usesAudio {
+    final s = _status;
+    return s.type == 'AUDIO' ||
+        (s.type == 'IMAGE' && (s.musicUrl?.isNotEmpty ?? false));
   }
 
   Future<void> _startVideo(StatusItem s) async {
@@ -114,11 +124,11 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     }
   }
 
-  Future<void> _startAudio(StatusItem s) async {
+  Future<void> _startAudio(String? url) async {
     final p = AudioPlayer();
     _audio = p;
     try {
-      await p.setUrl(s.mediaUrl ?? '');
+      await p.setUrl(url ?? '');
       if (!identical(_audio, p)) return;
       p.positionStream.listen((_) {
         if (mounted) setState(() {});
@@ -146,7 +156,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       }
       return 0;
     }
-    if (s.type == 'AUDIO') {
+    if (_usesAudio) {
       final p = _audio;
       final d = p?.duration?.inMilliseconds ?? 0;
       final pos = p?.position.inMilliseconds ?? 0;
@@ -195,7 +205,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     final s = _status;
     if (s.type == 'VIDEO') {
       _video?.play();
-    } else if (s.type == 'AUDIO') {
+    } else if (_usesAudio) {
       _audio?.play();
     } else {
       _ctrl.forward();

@@ -22,6 +22,7 @@ class StatusService {
   Future<void> create({
     required String type,
     String? mediaUrl,
+    String? musicUrl,
     String? text,
     String? bgColor,
     String? caption,
@@ -29,6 +30,7 @@ class StatusService {
     await _api.dio.post('/status', data: {
       'type': type,
       'mediaUrl': ?mediaUrl,
+      'musicUrl': ?musicUrl,
       'text': ?text,
       'bgColor': ?bgColor,
       'caption': ?caption,
