@@ -208,6 +208,27 @@ class _AddContactSheetState extends State<_AddContactSheet> {
         height: MediaQuery.of(context).size.height * 0.7,
         child: Column(
           children: [
+            // Tambah kontak via scan QR (ala WhatsApp).
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor:
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.qr_code_scanner_rounded,
+                    color: Theme.of(context).colorScheme.primary),
+              ),
+              title: const Text('Pindai kode QR'),
+              subtitle: const Text('Tambah kontak dengan memindai QR'),
+              onTap: () async {
+                final nav = Navigator.of(context);
+                final onAdded = widget.onAdded;
+                nav.pop();
+                final added = await nav.push<bool>(MaterialPageRoute(
+                    builder: (_) => const QrScreen(initialTab: 1)));
+                if (added == true) onAdded();
+              },
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(

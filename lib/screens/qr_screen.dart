@@ -9,7 +9,8 @@ import '../widgets/avatar.dart';
 
 /// Kode QR kontak: tab "Kode saya" (tampilkan QR) + "Pindai" (scan kamera).
 class QrScreen extends StatefulWidget {
-  const QrScreen({super.key});
+  final int initialTab; // 0 = Kode saya, 1 = Pindai
+  const QrScreen({super.key, this.initialTab = 0});
 
   @override
   State<QrScreen> createState() => _QrScreenState();
@@ -50,6 +51,7 @@ class _QrScreenState extends State<QrScreen> {
     final palette = AppPalette.of(context);
     return DefaultTabController(
       length: 2,
+      initialIndex: widget.initialTab,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Kode QR'),
