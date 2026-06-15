@@ -90,9 +90,6 @@ class StatusProvider extends ChangeNotifier {
     await loadFeed();
   }
 
-  Future<String> uploadImage(List<int> bytes, String name) =>
-      _service.uploadImage(bytes, name);
-
   void markViewed(String id) => _service.markViewed(id);
 
   Future<void> deleteStatus(String id) async {

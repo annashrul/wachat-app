@@ -51,6 +51,7 @@ dependencies:
   just_audio: ^0.10.5
   path_provider: ^2.1.5
   flutter_webrtc: ^1.5.1
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:

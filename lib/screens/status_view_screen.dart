@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
+import 'package:just_audio/just_audio.dart';
 import '../models/status.dart';
 import '../models/user.dart';
 import '../providers/status_provider.dart';
@@ -31,11 +33,14 @@ class StatusViewScreen extends StatefulWidget {
 class _StatusViewScreenState extends State<StatusViewScreen>
     with SingleTickerProviderStateMixin {
   final _service = StatusService();
-  late final AnimationController _ctrl;
-  late int _s; // index cerita (user)
-  int _i = 0; // index status dalam cerita
+  late final AnimationController _ctrl; // untuk IMAGE/TEXT (durasi tetap)
+  VideoPlayerController? _video;
+  AudioPlayer? _audio;
+  late int _s;
+  int _i = 0;
+  bool _advanced = false; // cegah maju ganda
 
-  static const _dur = Duration(seconds: 5);
+  static const _staticDur = Duration(seconds: 5);
 
   StatusStory get _story => widget.stories[_s];
   StatusItem get _status => _story.statuses[_i];
@@ -44,7 +49,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   void initState() {
     super.initState();
     _s = widget.startIndex;
-    _ctrl = AnimationController(vsync: this, duration: _dur)
+    _ctrl = AnimationController(vsync: this, duration: _staticDur)
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) _next();
       })
@@ -52,11 +57,102 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
-  void _start() {
-    if (!_story.isMine) _service.markViewed(_status.id);
-    _ctrl
-      ..reset()
-      ..forward();
+  Future<void> _disposeMedia() async {
+    _ctrl.stop();
+    final v = _video;
+    _video = null;
+    if (v != null) {
+      v.removeListener(_videoTick);
+      await v.dispose();
+    }
+    final a = _audio;
+    _audio = null;
+    if (a != null) await a.dispose();
+  }
+
+  Future<void> _start() async {
+    await _disposeMedia();
+    _advanced = false;
+    if (!mounted) return;
+    final s = _status;
+    if (!_story.isMine) _service.markViewed(s.id);
+
+    if (s.type == 'VIDEO') {
+      await _startVideo(s);
+    } else if (s.type == 'AUDIO') {
+      await _startAudio(s);
+    } else {
+      setState(() {});
+      _ctrl
+        ..reset()
+        ..forward();
+    }
+  }
+
+  Future<void> _startVideo(StatusItem s) async {
+    final c = VideoPlayerController.networkUrl(Uri.parse(s.mediaUrl ?? ''));
+    _video = c;
+    try {
+      await c.initialize();
+      if (!identical(_video, c)) return; // sudah pindah status
+      c.addListener(_videoTick);
+      await c.play();
+      if (mounted) setState(() {});
+    } catch (_) {
+      _next(); // gagal muat → lanjut
+    }
+  }
+
+  void _videoTick() {
+    final c = _video;
+    if (c == null || !c.value.isInitialized) return;
+    if (mounted) setState(() {});
+    final dur = c.value.duration;
+    if (dur > Duration.zero && c.value.position >= dur && !_advanced) {
+      _advanced = true;
+      _next();
+    }
+  }
+
+  Future<void> _startAudio(StatusItem s) async {
+    final p = AudioPlayer();
+    _audio = p;
+    try {
+      await p.setUrl(s.mediaUrl ?? '');
+      if (!identical(_audio, p)) return;
+      p.positionStream.listen((_) {
+        if (mounted) setState(() {});
+      });
+      p.playerStateStream.listen((st) {
+        if (st.processingState == ProcessingState.completed && !_advanced) {
+          _advanced = true;
+          _next();
+        }
+      });
+      await p.play();
+      if (mounted) setState(() {});
+    } catch (_) {
+      _next();
+    }
+  }
+
+  double _segmentProgress() {
+    final s = _status;
+    if (s.type == 'VIDEO') {
+      final c = _video;
+      if (c != null && c.value.isInitialized) {
+        final d = c.value.duration.inMilliseconds;
+        return d == 0 ? 0 : (c.value.position.inMilliseconds / d).clamp(0, 1);
+      }
+      return 0;
+    }
+    if (s.type == 'AUDIO') {
+      final p = _audio;
+      final d = p?.duration?.inMilliseconds ?? 0;
+      final pos = p?.position.inMilliseconds ?? 0;
+      return d == 0 ? 0 : (pos / d).clamp(0, 1);
+    }
+    return _ctrl.value;
   }
 
   void _next() {
@@ -85,13 +181,32 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       });
       _start();
     } else {
-      _start(); // ulang dari awal
+      _start();
+    }
+  }
+
+  void _pause() {
+    _ctrl.stop();
+    _video?.pause();
+    _audio?.pause();
+  }
+
+  void _resume() {
+    final s = _status;
+    if (s.type == 'VIDEO') {
+      _video?.play();
+    } else if (s.type == 'AUDIO') {
+      _audio?.play();
+    } else {
+      _ctrl.forward();
     }
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _video?.dispose();
+    _audio?.dispose();
     super.dispose();
   }
 
@@ -118,7 +233,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   }
 
   void _showViewers() {
-    _ctrl.stop(); // jeda saat melihat daftar
+    _pause();
     final id = _status.id;
     showModalBottomSheet<void>(
       context: context,
@@ -134,9 +249,8 @@ class _StatusViewScreenState extends State<StatusViewScreen>
           }
           if (viewers.isEmpty) {
             return const SizedBox(
-              height: 160,
-              child: Center(child: Text('Belum ada yang melihat')),
-            );
+                height: 160,
+                child: Center(child: Text('Belum ada yang melihat')));
           }
           return ListView(
             shrinkWrap: true,
@@ -153,7 +267,8 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                 ),
               ),
               ...viewers.map((u) => ListTile(
-                    leading: Avatar(url: u.avatarUrl, name: u.displayName, radius: 20),
+                    leading: Avatar(
+                        url: u.avatarUrl, name: u.displayName, radius: 20),
                     title: Text(u.displayName),
                   )),
             ],
@@ -161,18 +276,63 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         },
       ),
     ).whenComplete(() {
-      if (mounted) _ctrl.forward(); // lanjutkan setelah sheet ditutup
+      if (mounted) _resume();
     });
+  }
+
+  Widget _content(StatusItem s) {
+    switch (s.type) {
+      case 'TEXT':
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(s.text ?? '',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w600)),
+        );
+      case 'AUDIO':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.music_note_rounded, color: Colors.white, size: 96),
+            if (s.caption?.isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 18, 32, 0),
+                child: Text(s.caption!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 18)),
+              ),
+          ],
+        );
+      case 'VIDEO':
+        final c = _video;
+        if (c != null && c.value.isInitialized) {
+          return AspectRatio(
+              aspectRatio: c.value.aspectRatio, child: VideoPlayer(c));
+        }
+        return const CircularProgressIndicator(color: Colors.white);
+      default: // IMAGE
+        return CachedNetworkImage(
+          imageUrl: s.mediaUrl ?? '',
+          fit: BoxFit.contain,
+          placeholder: (_, _) =>
+              const CircularProgressIndicator(color: Colors.white),
+          errorWidget: (_, _, _) =>
+              const Icon(Icons.broken_image, color: Colors.white54, size: 48),
+        );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = _status;
-    final isText = s.type == 'TEXT';
+    final colored = s.type == 'TEXT' || s.type == 'AUDIO';
     final liveCount =
         context.watch<StatusProvider>().viewCountById(s.id) ?? s.viewCount;
     return Scaffold(
-      backgroundColor: isText ? _parseColor(s.bgColor) : Colors.black,
+      backgroundColor: colored ? _parseColor(s.bgColor) : Colors.black,
       body: GestureDetector(
         onTapUp: (d) {
           final w = MediaQuery.of(context).size.width;
@@ -184,32 +344,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         },
         child: Stack(
           children: [
-            Positioned.fill(
-              child: Center(
-                child: isText
-                    ? Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Text(
-                          s.text ?? '',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: s.mediaUrl ?? '',
-                        fit: BoxFit.contain,
-                        placeholder: (_, _) => const Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white)),
-                        errorWidget: (_, _, _) => const Icon(Icons.broken_image,
-                            color: Colors.white54, size: 48),
-                      ),
-              ),
-            ),
+            Positioned.fill(child: Center(child: _content(s))),
             SafeArea(
               child: Column(
                 children: [
@@ -227,7 +362,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                                 value: k < _i
                                     ? 1.0
                                     : k == _i
-                                        ? _ctrl.value
+                                        ? _segmentProgress().toDouble()
                                         : 0.0,
                                 minHeight: 2.5,
                                 backgroundColor: Colors.white38,
@@ -270,7 +405,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!isText && (s.caption?.isNotEmpty ?? false))
+                      if (s.type != 'TEXT' &&
+                          s.type != 'AUDIO' &&
+                          (s.caption?.isNotEmpty ?? false))
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Text(s.caption!,
@@ -281,7 +418,6 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Ketuk untuk melihat siapa saja yang melihat.
                             InkWell(
                               onTap: _showViewers,
                               borderRadius: BorderRadius.circular(8),

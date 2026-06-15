@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/status.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -26,13 +28,34 @@ class _StatusScreenState extends State<StatusScreen> {
     });
   }
 
-  Future<void> _addImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null || !mounted) return;
+  /// Pilih banyak gambar/video sekaligus.
+  Future<void> _addMedia() async {
+    final picked = await ImagePicker().pickMultipleMedia();
+    if (picked.isEmpty || !mounted) return;
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => StatusComposeScreen(image: picked)),
+      MaterialPageRoute(builder: (_) => StatusComposeScreen(media: picked)),
     );
-    // Feed diperbarui otomatis lewat socket; muat ulang sebagai cadangan.
+    if (mounted) context.read<StatusProvider>().loadFeed();
+  }
+
+  /// Pilih file audio (musik).
+  Future<void> _addAudio() async {
+    final res =
+        await FilePicker.pickFiles(type: FileType.audio, withData: kIsWeb);
+    if (res == null || res.files.isEmpty || !mounted) return;
+    final pf = res.files.first;
+    XFile xf;
+    if (kIsWeb) {
+      if (pf.bytes == null) return;
+      xf = XFile.fromData(pf.bytes!, name: pf.name);
+    } else {
+      if (pf.path == null) return;
+      xf = XFile(pf.path!);
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => StatusComposeScreen(audio: xf)),
+    );
     if (mounted) context.read<StatusProvider>().loadFeed();
   }
 
@@ -45,7 +68,7 @@ class _StatusScreenState extends State<StatusScreen> {
 
   void _viewMine(AppUser me, List<StatusItem> mine) {
     if (mine.isEmpty) {
-      _addImage();
+      _addMedia();
       return;
     }
     Navigator.of(context)
@@ -108,13 +131,22 @@ class _StatusScreenState extends State<StatusScreen> {
         children: [
           FloatingActionButton.small(
             heroTag: 'status_text',
+            tooltip: 'Status teks',
             onPressed: _addText,
             child: const Icon(Icons.edit_rounded),
           ),
           const SizedBox(height: 12),
+          FloatingActionButton.small(
+            heroTag: 'status_music',
+            tooltip: 'Status musik',
+            onPressed: _addAudio,
+            child: const Icon(Icons.music_note_rounded),
+          ),
+          const SizedBox(height: 12),
           FloatingActionButton(
             heroTag: 'status_cam',
-            onPressed: _addImage,
+            tooltip: 'Foto/Video',
+            onPressed: _addMedia,
             child: const Icon(Icons.photo_camera_rounded),
           ),
         ],

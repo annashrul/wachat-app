@@ -45,10 +45,15 @@ class StatusService {
     await _api.dio.delete('/status/$id');
   }
 
-  /// Upload gambar status (pakai endpoint /upload yang sama).
-  Future<String> uploadImage(List<int> bytes, String filename) async {
+  /// Upload media status (gambar/video/audio) via endpoint /upload.
+  Future<String> uploadMedia(List<int> bytes, String filename,
+      {String? mime}) async {
     final form = FormData.fromMap({
-      'file': MultipartFile.fromBytes(bytes, filename: filename),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: mime != null ? DioMediaType.parse(mime) : null,
+      ),
     });
     final res = await _api.dio.post('/upload', data: form);
     return (res.data as Map<String, dynamic>)['url'] as String;
