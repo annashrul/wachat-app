@@ -54,12 +54,17 @@ class CallScreen extends StatelessWidget {
         body: SafeArea(
           child: Column(
             children: [
-              // Renderer tersembunyi untuk memutar audio lawan (penting di web).
+              // Renderer untuk memutar audio lawan (penting di web). Ukuran
+              // kecil (bukan 0) + opacity 0 agar elemen media benar-benar
+              // ter-mount di browser sehingga audionya diputar.
               if (call.hasRemote)
-                SizedBox(
-                  width: 0,
-                  height: 0,
-                  child: RTCVideoView(call.remoteRenderer),
+                Opacity(
+                  opacity: 0.0,
+                  child: SizedBox(
+                    width: 1,
+                    height: 1,
+                    child: RTCVideoView(call.remoteRenderer),
+                  ),
                 ),
               const Spacer(flex: 2),
               Avatar(

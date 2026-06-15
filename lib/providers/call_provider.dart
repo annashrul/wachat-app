@@ -185,6 +185,7 @@ class CallProvider extends ChangeNotifier {
     pc.onTrack = (event) {
       if (event.streams.isNotEmpty) {
         remoteRenderer.srcObject = event.streams[0];
+        notifyListeners(); // agar UI memasang RTCVideoView (audio web ikut main)
       }
     };
     pc.onConnectionState = (s) {
