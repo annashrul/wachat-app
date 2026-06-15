@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
+import 'qr_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -76,7 +77,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Kontak')),
+      appBar: AppBar(
+        title: const Text('Kontak'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_rounded),
+            tooltip: 'Kode QR',
+            onPressed: () async {
+              final added = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(builder: (_) => const QrScreen()),
+              );
+              if (added == true) _load();
+            },
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddSheet,
         icon: const Icon(Icons.person_add_alt_1_rounded),

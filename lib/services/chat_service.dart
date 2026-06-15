@@ -90,6 +90,23 @@ class ChatService {
         data: {'userId': userId, 'alias': ?alias});
   }
 
+  /// QR kontak milik sendiri: kembalikan link (untuk di-encode jadi QR) + profil.
+  Future<({String link, AppUser user})> myQr() async {
+    final res = await _api.dio.get('/users/me/qr');
+    final m = res.data as Map<String, dynamic>;
+    return (
+      link: m['link'] as String,
+      user: AppUser.fromJson(m['user'] as Map<String, dynamic>),
+    );
+  }
+
+  /// Tambah kontak dari hasil scan QR (token/link). Kembalikan profil kontak.
+  Future<AppUser> scanContact(String code) async {
+    final res = await _api.dio.post('/contacts/scan', data: {'code': code});
+    final m = res.data as Map<String, dynamic>;
+    return AppUser.fromJson(m['user'] as Map<String, dynamic>);
+  }
+
   Future<void> deleteContact(String contactId) async {
     await _api.dio.delete('/contacts/$contactId');
   }
