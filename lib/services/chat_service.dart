@@ -94,6 +94,14 @@ class ChatService {
     await _api.dio.delete('/contacts/$contactId');
   }
 
+  Future<void> blockUser(String userId) async {
+    await _api.dio.post('/contacts/block', data: {'userId': userId});
+  }
+
+  Future<void> unblockUser(String userId) async {
+    await _api.dio.delete('/contacts/block/$userId');
+  }
+
   Future<Map<String, dynamic>> linkPreview(String url) async {
     final res = await _api.dio.get('/link-preview',
         queryParameters: {'url': url});

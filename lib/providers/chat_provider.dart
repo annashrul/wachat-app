@@ -6,6 +6,7 @@ import '../models/message.dart';
 import '../services/chat_service.dart';
 import '../services/socket_service.dart';
 import '../services/notification_service.dart';
+import '../services/web_notify.dart';
 
 /// Mengelola daftar percakapan + pesan percakapan aktif, status koneksi,
 /// indikator mengetik (per percakapan), dan tanda terima (centang).
@@ -133,10 +134,34 @@ class ChatProvider extends ChangeNotifier {
 
   Future<void> toggleFavorite(String id) async {
     if (!_favorites.add(id)) _favorites.remove(id);
+    await _persistFavorites();
+  }
+
+  Future<void> setFavorite(String id, bool value) async {
+    if (value) {
+      _favorites.add(id);
+    } else {
+      _favorites.remove(id);
+    }
+    await _persistFavorites();
+  }
+
+  Future<void> _persistFavorites() async {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_favKey, _favorites.toList());
+    } catch (_) {}
+  }
+
+  /// Tandai sebuah percakapan sudah dibaca (reset badge + kabari server).
+  Future<void> markConvRead(String id) async {
+    final c = conversationById(id);
+    if (c != null) c.unreadCount = 0;
+    notifyListeners();
+    try {
+      await _chat.markRead(id);
+      _socket.emit('message:read', {'conversationId': id});
     } catch (_) {}
   }
 
@@ -301,16 +326,43 @@ class ChatProvider extends ChangeNotifier {
     }
 
     final idx = conversations.indexWhere((c) => c.id == msg.conversationId);
+    String convTitle = msg.senderName ?? 'Pesan baru';
     if (idx >= 0) {
       final c = conversations.removeAt(idx);
       c.lastMessage = msg;
       c.updatedAt = msg.createdAt;
       if (!isActive && !isMine) c.unreadCount += 1;
+      convTitle = c.isGroup ? c.title : (msg.senderName ?? c.title);
       conversations.insert(0, c);
     } else if (!isMine) {
       loadConversations();
     }
+    // Notifikasi browser (web) untuk pesan masuk dari orang lain.
+    if (!isMine) {
+      final c = conversationById(msg.conversationId);
+      final body = c != null && c.isGroup
+          ? '${msg.senderName ?? ''}: ${_previewText(msg)}'
+          : _previewText(msg);
+      WebNotify.notify(title: convTitle, body: body);
+    }
     notifyListeners();
+  }
+
+  String _previewText(Message m) {
+    switch (m.type) {
+      case 'IMAGE':
+        return '📷 Foto';
+      case 'FILE':
+        return '📎 ${m.mediaName ?? 'File'}';
+      case 'VOICE':
+        return '🎤 Pesan suara';
+      case 'STICKER':
+        return '🙂 Stiker';
+      case 'CALL':
+        return '📞 Panggilan suara';
+      default:
+        return m.content ?? '';
+    }
   }
 
   Future<void> loadConversations() async {

@@ -8,6 +8,7 @@ import '../providers/call_provider.dart';
 import '../providers/status_provider.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
+import '../services/web_notify.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
@@ -31,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   bool _searching = false;
   String _filter = 'all'; // all | unread | favorite | group
+  final Set<String> _selected = {}; // mode pilih banyak chat
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -48,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen> {
       chat.loadConversations();
       // Buka chat jika app dibuka dari tap notifikasi (saat app sebelumnya mati).
       NotificationService.instance.consumePending();
+      // Web: minta izin notifikasi browser.
+      WebNotify.requestPermission();
     });
   }
 
@@ -88,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final call = context.watch<CallProvider>();
     final unread = context.watch<ChatProvider>().totalUnread;
+    WebNotify.setUnread(unread); // badge favicon + judul tab (web)
     return Scaffold(
       body: IndexedStack(
         index: _tab,
@@ -172,8 +177,15 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: _selected.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selected.isNotEmpty) _clearSelection();
+      },
+      child: Scaffold(
+      appBar: _selected.isNotEmpty
+          ? _selectionBar(scheme)
+          : AppBar(
         titleSpacing: _searching ? 8 : 20,
         toolbarHeight: 64,
         leading: _searching
@@ -339,12 +351,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       final lastMine = c.lastMessage != null &&
                           c.lastMessage!.senderId == myId;
                       final showTick = lastMine && !isTyping;
+                      final selected = _selected.contains(c.id);
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 6,
                         ),
-                        leading: _chatLeading(c, status, scheme, palette),
+                        selected: selected,
+                        selectedTileColor:
+                            scheme.primary.withValues(alpha: 0.08),
+                        leading: selected
+                            ? CircleAvatar(
+                                radius: 27,
+                                backgroundColor: scheme.primary,
+                                child: const Icon(Icons.check_rounded,
+                                    color: Colors.white),
+                              )
+                            : _chatLeading(c, status, myId, scheme, palette),
                         title: Text(
                           c.title,
                           maxLines: 1,
@@ -433,14 +456,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 20),
                           ],
                         ),
-                        onTap: () => _openChat(c),
-                        onLongPress: () => _showChatMenu(c),
+                        onTap: () => _selected.isNotEmpty
+                            ? _toggleSelect(c.id)
+                            : _openChat(c),
+                        onLongPress: () => _toggleSelect(c.id),
                       );
                     },
                   ),
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -487,39 +513,136 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showChatMenu(Conversation c) {
+  // ===== Mode pilih banyak chat (ala WhatsApp) =====
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selected.add(id)) _selected.remove(id);
+    });
+  }
+
+  void _clearSelection() => setState(_selected.clear);
+
+  PreferredSizeWidget _selectionBar(ColorScheme scheme) {
     final chat = context.read<ChatProvider>();
-    final fav = chat.isFavorite(c.id);
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(fav ? Icons.star_rounded : Icons.star_outline_rounded),
-              title: Text(fav ? 'Hapus dari favorit' : 'Tambah ke favorit'),
-              onTap: () {
-                Navigator.pop(context);
-                chat.toggleFavorite(c.id);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete_rounded,
-                  color: Theme.of(context).colorScheme.error),
-              title: Text('Hapus chat',
-                  style:
-                      TextStyle(color: Theme.of(context).colorScheme.error)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmDeleteChat(c);
-              },
-            ),
-          ],
+    final allFav = _selected.every(chat.isFavorite);
+    final single = _selected.length == 1;
+    final one = single ? chat.conversationById(_selected.first) : null;
+    final canBlock = one != null && !one.isGroup && one.peer != null;
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close_rounded),
+        onPressed: _clearSelection,
+      ),
+      title: Text('${_selected.length}'),
+      actions: [
+        IconButton(
+          tooltip: 'Tandai dibaca',
+          icon: const Icon(Icons.mark_chat_read_outlined),
+          onPressed: _markReadSelected,
         ),
+        IconButton(
+          tooltip: allFav ? 'Hapus dari favorit' : 'Tambah ke favorit',
+          icon: Icon(allFav ? Icons.star_rounded : Icons.star_outline_rounded),
+          onPressed: () => _favoriteSelected(!allFav),
+        ),
+        IconButton(
+          tooltip: 'Hapus',
+          icon: const Icon(Icons.delete_outline_rounded),
+          onPressed: _deleteSelected,
+        ),
+        if (canBlock)
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'block') _blockSelected(one);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'block',
+                child: Row(children: [
+                  Icon(Icons.block_rounded, size: 20),
+                  SizedBox(width: 10),
+                  Text('Blokir'),
+                ]),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Future<void> _markReadSelected() async {
+    final chat = context.read<ChatProvider>();
+    for (final id in _selected) {
+      chat.markConvRead(id);
+    }
+    _clearSelection();
+  }
+
+  Future<void> _favoriteSelected(bool value) async {
+    final chat = context.read<ChatProvider>();
+    for (final id in _selected) {
+      chat.setFavorite(id, value);
+    }
+    _clearSelection();
+  }
+
+  Future<void> _deleteSelected() async {
+    final chat = context.read<ChatProvider>();
+    final ids = _selected.toList();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Hapus ${ids.length} chat?'),
+        content: const Text('Percakapan terpilih akan dihapus dari daftar.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus')),
+        ],
       ),
     );
+    if (ok != true) return;
+    _clearSelection();
+    for (final id in ids) {
+      try {
+        await chat.deleteConversation(id);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _blockSelected(Conversation c) async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final peer = c.peer;
+    if (peer == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Blokir ${peer.displayName}?'),
+        content: const Text(
+            'Anda tidak akan menerima pesan dari kontak ini lagi.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Blokir')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    _clearSelection();
+    try {
+      await chat.service.blockUser(peer.id);
+      messenger.showSnackBar(
+          SnackBar(content: Text('${peer.displayName} diblokir')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    }
   }
 
   Widget _emptyState(AppPalette palette) {
@@ -549,23 +672,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Avatar di daftar chat + cincin status (hijau=belum dilihat, abu=sudah).
-  /// Ketuk avatar yang bercincin → buka status orang itu.
-  Widget _chatLeading(Conversation c, StatusProvider status,
+  /// Avatar di daftar chat + cincin status tersegmentasi (1 busur/status,
+  /// hijau=belum dilihat, abu=sudah). Ketuk avatar bercincin → buka statusnya.
+  Widget _chatLeading(Conversation c, StatusProvider status, String? myId,
       ColorScheme scheme, AppPalette palette) {
-    String? ring;
     final peer = c.peer;
-    if (!c.isGroup && peer != null) ring = status.ringState(peer.id);
-    Color? ringColor;
-    if (ring == 'unseen') {
-      ringColor = scheme.primary;
-    } else if (ring == 'seen') {
-      ringColor = palette.muted.withValues(alpha: 0.5);
+    List<bool>? segs;
+    if (!c.isGroup && peer != null && myId != null) {
+      segs = status.seenSegments(peer.id, myId);
     }
     final avatar =
-        Avatar(url: c.avatarUrl, name: c.title, radius: 27, ringColor: ringColor);
-    if (ring != null && peer != null) {
-      return GestureDetector(onTap: () => _openPeerStatus(peer.id), child: avatar);
+        Avatar(url: c.avatarUrl, name: c.title, radius: 27, ringSegments: segs);
+    if (segs != null && peer != null) {
+      return GestureDetector(
+          onTap: () => _openPeerStatus(peer.id), child: avatar);
     }
     return avatar;
   }
@@ -590,34 +710,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _confirmDeleteChat(Conversation c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Hapus chat?'),
-        content: Text('Hapus percakapan dengan "${c.title}" dari daftar Anda?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      try {
-        await context.read<ChatProvider>().deleteConversation(c.id);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))),
-          );
-        }
-      }
-    }
-  }
 }

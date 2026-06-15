@@ -73,6 +73,13 @@ class StatusProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Per-status: true = sudah dilihat oleh [myId] (untuk cincin tersegmentasi).
+  List<bool>? seenSegments(String userId, String myId) {
+    final e = entryFor(userId);
+    if (e == null) return null;
+    return e.statuses.map((s) => s.viewers.contains(myId)).toList();
+  }
+
   Future<void> create({
     required String type,
     String? mediaUrl,

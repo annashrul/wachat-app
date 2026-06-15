@@ -193,12 +193,13 @@ class _StatusScreenState extends State<StatusScreen> {
                     )
                   else
                     ...others.map((e) => ListTile(
-                          leading: _ringedAvatar(
+                          leading: Avatar(
                             url: e.user.avatarUrl,
                             name: e.user.displayName,
-                            ringColor: e.hasUnseen
-                                ? scheme.primary
-                                : palette.muted.withValues(alpha: 0.5),
+                            radius: 24,
+                            ringSegments: e.statuses
+                                .map((s) => s.viewers.contains(me?.id ?? ''))
+                                .toList(),
                           ),
                           title: Text(e.user.displayName,
                               style:

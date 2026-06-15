@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -9,12 +10,16 @@ class Avatar extends StatelessWidget {
   final double radius;
   // Cincin status (ala WhatsApp). null = tanpa cincin.
   final Color? ringColor;
+  // Cincin status tersegmentasi: satu busur per status. true = sudah dilihat.
+  // Diprioritaskan di atas [ringColor].
+  final List<bool>? ringSegments;
   const Avatar({
     super.key,
     this.url,
     required this.name,
     this.radius = 24,
     this.ringColor,
+    this.ringSegments,
   });
 
   static const _colors = <Color>[
@@ -68,8 +73,28 @@ class Avatar extends StatelessWidget {
         ),
       );
     }
+    final segs = ringSegments;
+    if (segs != null && segs.isNotEmpty) {
+      const stroke = 2.8;
+      const gap = 3.0; // jarak cincin ke avatar
+      final outer = size + (stroke + gap) * 2;
+      return SizedBox(
+        width: outer,
+        height: outer,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CustomPaint(
+              size: Size(outer, outer),
+              painter: _SegmentRingPainter(seen: segs, stroke: stroke),
+            ),
+            inner,
+          ],
+        ),
+      );
+    }
     if (ringColor == null) return inner;
-    // Cincin + sedikit jarak (gap putih) ala WhatsApp.
+    // Cincin solid + sedikit jarak (gap) ala WhatsApp.
     return Container(
       padding: const EdgeInsets.all(2.5),
       decoration: BoxDecoration(
@@ -78,5 +103,54 @@ class Avatar extends StatelessWidget {
       ),
       child: inner,
     );
+  }
+}
+
+/// Menggambar cincin status: 1 busur per status, dengan celah pemisah.
+/// Busur hijau = belum dilihat, abu = sudah dilihat (ala WhatsApp).
+class _SegmentRingPainter extends CustomPainter {
+  final List<bool> seen;
+  final double stroke;
+  static const _unseen = Color(0xFF22C55E);
+  static const _seen = Color(0xFF9CA3AF);
+
+  _SegmentRingPainter({required this.seen, required this.stroke});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = seen.length;
+    final r = (size.width - stroke) / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    if (n == 1) {
+      p.color = seen[0] ? _seen : _unseen;
+      canvas.drawCircle(center, r, p);
+      return;
+    }
+    final rect = Rect.fromCircle(center: center, radius: r);
+    const gap = 0.22; // radian celah antar segmen
+    final sweep = (2 * math.pi - gap * n) / n;
+    var start = -math.pi / 2 + gap / 2;
+    for (var i = 0; i < n; i++) {
+      p.color = seen[i] ? _seen : _unseen;
+      canvas.drawArc(rect, start, sweep, false, p);
+      start += sweep + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SegmentRingPainter old) =>
+      old.seen.length != seen.length ||
+      !_listEq(old.seen, seen) ||
+      old.stroke != stroke;
+
+  static bool _listEq(List<bool> a, List<bool> b) {
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }
