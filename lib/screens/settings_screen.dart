@@ -6,6 +6,7 @@ import '../providers/settings_provider.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'profile_edit_screen.dart';
+import 'qr_screen.dart';
 import 'settings/account_settings_screen.dart';
 import 'settings/privacy_settings_screen.dart';
 import 'settings/notification_settings_screen.dart';
@@ -62,7 +63,13 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.qr_code_rounded, color: palette.muted),
+                  IconButton(
+                    icon: Icon(Icons.qr_code_rounded, color: palette.muted),
+                    tooltip: 'Kode QR',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const QrScreen()),
+                    ),
+                  ),
                 ],
               ),
             ),
