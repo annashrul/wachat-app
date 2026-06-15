@@ -42,50 +42,53 @@ class Avatar extends StatelessWidget {
     return _colors[hash % _colors.length];
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final size = radius * 2;
-    Widget inner;
+  Widget _image(double r) {
     if (url != null && url!.isNotEmpty) {
-      inner = CircleAvatar(
-        radius: radius,
+      return CircleAvatar(
+        radius: r,
         backgroundColor: Colors.black12,
         backgroundImage: CachedNetworkImageProvider(url!),
       );
-    } else {
-      final initial =
-          name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
-      inner = Container(
+    }
+    final initial = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+    return Container(
+      width: r * 2,
+      height: r * 2,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: _colorFor(name)),
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: r * 0.82,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    final segs = ringSegments;
+    final hasRing = segs != null && segs.isNotEmpty;
+    const stroke = 2.8;
+    const gap = 2.0;
+    // Ukuran total SELALU radius*2. Saat ada cincin, gambar dikecilkan agar
+    // ukuran avatar sama dengan yang tanpa status (tidak membesar).
+    final innerRadius =
+        (hasRing || ringColor != null) ? radius - stroke - gap : radius;
+    final inner = _image(innerRadius);
+
+    if (hasRing) {
+      return SizedBox(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _colorFor(name),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          initial,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: radius * 0.82,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-    }
-    final segs = ringSegments;
-    if (segs != null && segs.isNotEmpty) {
-      const stroke = 2.8;
-      const gap = 3.0; // jarak cincin ke avatar
-      final outer = size + (stroke + gap) * 2;
-      return SizedBox(
-        width: outer,
-        height: outer,
         child: Stack(
           alignment: Alignment.center,
           children: [
             CustomPaint(
-              size: Size(outer, outer),
+              size: Size(size, size),
               painter: _SegmentRingPainter(seen: segs, stroke: stroke),
             ),
             inner,
@@ -93,16 +96,27 @@ class Avatar extends StatelessWidget {
         ),
       );
     }
-    if (ringColor == null) return inner;
-    // Cincin solid + sedikit jarak (gap) ala WhatsApp.
-    return Container(
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: ringColor!, width: 2.2),
-      ),
-      child: inner,
-    );
+    if (ringColor != null) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: ringColor!, width: stroke),
+              ),
+            ),
+            inner,
+          ],
+        ),
+      );
+    }
+    return inner;
   }
 }
 
