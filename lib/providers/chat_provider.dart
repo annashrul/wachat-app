@@ -99,6 +99,15 @@ class ChatProvider extends ChangeNotifier {
   int get totalUnread =>
       conversations.fold(0, (sum, c) => sum + c.unreadCount);
 
+  /// Perbarui badge web (judul tab + favicon) langsung dari lapisan data.
+  ///
+  /// Penting: jangan mengandalkan `build()` HomeScreen untuk ini. Flutter web
+  /// membekukan render loop saat tab di latar belakang, sehingga badge tidak
+  /// akan ter-update sampai tab kembali aktif. Memanggilnya di sini (dari
+  /// handler event socket) memastikan badge naik/turun seketika walau tab
+  /// sedang tidak terlihat.
+  void _syncWebBadge() => WebNotify.setUnread(totalUnread);
+
   Conversation? conversationById(String id) {
     for (final c in conversations) {
       if (c.id == id) return c;
@@ -158,6 +167,7 @@ class ChatProvider extends ChangeNotifier {
   Future<void> markConvRead(String id) async {
     final c = conversationById(id);
     if (c != null) c.unreadCount = 0;
+    _syncWebBadge();
     notifyListeners();
     try {
       await _chat.markRead(id);
@@ -242,6 +252,7 @@ class ChatProvider extends ChangeNotifier {
     conversations.removeWhere((c) => c.id == conversationId);
     _messageCache.remove(conversationId);
     _drafts.remove(conversationId);
+    _syncWebBadge();
     notifyListeners();
   }
 
@@ -345,6 +356,8 @@ class ChatProvider extends ChangeNotifier {
           : _previewText(msg);
       WebNotify.notify(title: convTitle, body: body);
     }
+    // Update badge seketika (tab latar belakang tidak menunggu rebuild).
+    _syncWebBadge();
     notifyListeners();
   }
 
@@ -378,6 +391,7 @@ class ChatProvider extends ChangeNotifier {
       }
     } finally {
       loadingConversations = false;
+      _syncWebBadge();
       notifyListeners();
     }
   }
@@ -433,6 +447,7 @@ class ChatProvider extends ChangeNotifier {
       _socket.emit('message:read', {'conversationId': conversationId});
       final idx = conversations.indexWhere((c) => c.id == conversationId);
       if (idx >= 0) conversations[idx].unreadCount = 0;
+      _syncWebBadge();
     } finally {
       loadingMessages = false;
       notifyListeners();
