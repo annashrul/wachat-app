@@ -7,20 +7,21 @@ import '../services/status_service.dart';
 class StatusProvider extends ChangeNotifier {
   final _service = StatusService();
   final _socket = SocketService.instance;
-  bool _attached = false;
 
   StatusFeed feed = StatusFeed(mine: [], others: []);
   bool loading = false;
 
   void init(String myUserId) {
-    if (!_attached) {
-      _attach();
-      _attached = true;
-    }
+    // Selalu pasang ulang: tiap login membuat socket baru (forceNew), jadi
+    // listener harus mengikuti socket terbaru, bukan socket akun sebelumnya.
+    _attach();
     loadFeed();
   }
 
   void _attach() {
+    // Lepas dulu agar tidak dobel saat init dipanggil pada socket yang sama.
+    _socket.off('status:new');
+    _socket.off('status:viewed');
     // Ada status baru dari orang lain (atau perangkat lain kita) → muat ulang.
     _socket.on('status:new', (_) => loadFeed());
     // Status kita dilihat seseorang → perbarui jumlah "dilihat" seketika.

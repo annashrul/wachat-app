@@ -18,6 +18,12 @@ class SocketService {
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
+          // Penting: paksa Manager baru tiap connect. Tanpa ini socket_io_client
+          // me-reuse Manager yang di-cache per-URL beserta auth handshake LAMA,
+          // sehingga setelah ganti akun socket masih memakai token akun lama
+          // (pesan tercatat atas nama user sebelumnya). forceNew = identitas
+          // selalu ikut token terbaru.
+          .enableForceNew()
           .setAuth({'token': token})
           .build(),
     );

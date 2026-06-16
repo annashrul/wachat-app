@@ -16,7 +16,6 @@ class ChatProvider extends ChangeNotifier {
   final _socket = SocketService.instance;
 
   String? _myUserId;
-  bool _listenersAttached = false;
   int _tempCounter = 0;
 
   bool connected = false;
@@ -122,10 +121,9 @@ class ChatProvider extends ChangeNotifier {
   void init(String myUserId) {
     _myUserId = myUserId;
     connected = _socket.connected;
-    if (!_listenersAttached) {
-      _attachListeners();
-      _listenersAttached = true;
-    }
+    // Selalu pasang ulang: tiap login membuat socket baru (forceNew), jadi
+    // listener harus mengikuti socket akun terbaru, bukan socket lama.
+    _attachListeners();
     _loadFavorites();
   }
 
@@ -180,6 +178,19 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _attachListeners() {
+    // Lepas dulu agar tidak terdaftar ganda bila init dipanggil pada socket sama.
+    for (final e in const [
+      'connect',
+      'disconnect',
+      'message:new',
+      'typing',
+      'message:read',
+      'message:delivered',
+      'message:deleted',
+      'presence',
+    ]) {
+      _socket.off(e);
+    }
     _socket.on('connect', (_) {
       connected = true;
       notifyListeners();
@@ -599,7 +610,6 @@ class ChatProvider extends ChangeNotifier {
       t.cancel();
     }
     _typingTimers.clear();
-    _listenersAttached = false;
     _socket.off('connect');
     _socket.off('disconnect');
     _socket.off('message:new');

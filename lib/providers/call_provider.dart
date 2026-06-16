@@ -79,8 +79,10 @@ class CallProvider extends ChangeNotifier {
 
   void init(String myUserId) {
     _myId = myUserId;
+    // Selalu pasang ulang listener: tiap login membuat socket baru (forceNew),
+    // jadi listener panggilan harus mengikuti socket akun terbaru.
+    _attach();
     if (!_attached) {
-      _attach();
       // Notifikasi panggilan (app dibuka dari push) → tampilkan layar masuk.
       NotificationService.instance.onIncomingCall = (m) => showIncomingFromPush(
             callerId: (m['callerId'] as String?) ?? '',
@@ -90,8 +92,8 @@ class CallProvider extends ChangeNotifier {
           );
       NotificationService.instance.consumePendingCall();
       _attached = true;
-      _loadSeenThenCalls();
     }
+    _loadSeenThenCalls();
   }
 
   Future<void> _loadSeenThenCalls() async {
@@ -155,6 +157,19 @@ class CallProvider extends ChangeNotifier {
   }
 
   void _attach() {
+    // Lepas dulu agar tidak terdaftar ganda di socket yang sama.
+    for (final e in const [
+      'call:incoming',
+      'call:accepted',
+      'call:offer',
+      'call:answered',
+      'call:ice',
+      'call:rejected',
+      'call:ended',
+      'call:unavailable',
+    ]) {
+      _socket.off(e);
+    }
     _socket.on('call:incoming',
         (d) => _onIncoming(Map<String, dynamic>.from(d as Map)));
     _socket.on('call:accepted', (_) => _onAccepted());

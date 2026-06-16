@@ -542,11 +542,27 @@ class _StatusViewScreenState extends State<StatusViewScreen>
               ),
             ),
             // Redup status saat sedang membalas (overlay ala WhatsApp).
+            // Gradien: makin gelap ke bawah dan menjadi satu warna solid di
+            // area komposer — supaya tidak ada "dua warna" / garis sambungan
+            // antara konten status dan latar di belakang form balasan.
             if (_replyOpen)
               Positioned.fill(
                 child: GestureDetector(
                   onTap: _closeReply,
-                  child: Container(color: Colors.black.withValues(alpha: 0.55)),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.25),
+                          Colors.black.withValues(alpha: 0.55),
+                          Colors.black.withValues(alpha: 0.92),
+                        ],
+                        stops: const [0.0, 0.55, 1.0],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
