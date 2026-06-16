@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:app_links/app_links.dart';
 import '../models/conversation.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
@@ -35,6 +37,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _selected = {}; // mode pilih banyak chat
   final _searchCtrl = TextEditingController();
   String _query = '';
+  final _appLinks = AppLinks();
+  StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
@@ -52,12 +56,36 @@ class _HomeScreenState extends State<HomeScreen> {
       NotificationService.instance.consumePending();
       // Web: minta izin notifikasi browser.
       WebNotify.requestPermission();
+      _initDeepLinks();
     });
+  }
+
+  // Tangani deep link kontak (App Links https / skema wachat://contact).
+  Future<void> _initDeepLinks() async {
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) _handleLink(initial);
+    } catch (_) {}
+    _linkSub = _appLinks.uriLinkStream.listen(_handleLink, onError: (_) {});
+  }
+
+  Future<void> _handleLink(Uri uri) async {
+    final token = uri.queryParameters['token'];
+    if (token == null || token.isEmpty || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final user = await context.read<ChatProvider>().service.scanContact(token);
+      messenger.showSnackBar(
+          SnackBar(content: Text('${user.displayName} ditambahkan ke kontak')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    }
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _linkSub?.cancel();
     super.dispose();
   }
 
