@@ -399,6 +399,40 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     );
   }
 
+  /// Latar blur penuh layar dari media (mengisi area letterbox agar tidak ada
+  /// blok hitam di belakang konten/komposer). Foto & video; lainnya pakai
+  /// warna Scaffold.
+  Widget _backdrop(StatusItem s) {
+    Widget? base;
+    if (s.type == 'IMAGE' && (s.mediaUrl?.isNotEmpty ?? false)) {
+      base = Image(
+        image: CachedNetworkImageProvider(s.mediaUrl!),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    } else if (s.type == 'VIDEO') {
+      final c = _video;
+      if (c != null && c.value.isInitialized) {
+        base = FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: c.value.size.width,
+            height: c.value.size.height,
+            child: VideoPlayer(c),
+          ),
+        );
+      }
+    }
+    if (base == null) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: base,
+      ),
+    );
+  }
+
   Widget _content(StatusItem s) {
     switch (s.type) {
       case 'TEXT':
@@ -478,21 +512,8 @@ class _StatusViewScreenState extends State<StatusViewScreen>
           children: [
             // Latar penuh layar: versi blur dari media supaya tidak ada area
             // hitam (letterbox) di sisi/atas-bawah. Dengan begitu latar di
-            // belakang konten & komposer balasan jadi SATU warna, tidak
-            // tumpang tindih hitam + warna status.
-            if ((s.type == 'IMAGE' || s.type == 'VIDEO') &&
-                (s.mediaUrl?.isNotEmpty ?? false))
-              Positioned.fill(
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                  child: CachedNetworkImage(
-                    imageUrl: s.mediaUrl!,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, _, _) =>
-                        const ColoredBox(color: Colors.black),
-                  ),
-                ),
-              ),
+            // belakang konten & komposer balasan jadi SATU warna.
+            _backdrop(s),
             Positioned.fill(child: Center(child: _content(s))),
             // Tombol navigasi prev/next.
             if (!(_s == 0 && _i == 0))
@@ -559,14 +580,15 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                 ],
               ),
             ),
-            // Redup status saat sedang membalas (overlay ala WhatsApp).
-            // SATU warna rata di seluruh layar — tidak ada gradien/garis
-            // sambungan, jadi latar di belakang form balasan seragam.
+            // Saat membalas: area transparan untuk menutup balasan bila diketuk
+            // di luar komposer. Tanpa warna gelap, jadi tidak ada blok hitam
+            // di belakang form balasan.
             if (_replyOpen)
               Positioned.fill(
                 child: GestureDetector(
                   onTap: _closeReply,
-                  child: const ColoredBox(color: Color(0x99000000)),
+                  behavior: HitTestBehavior.opaque,
+                  child: const SizedBox.expand(),
                 ),
               ),
             // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
