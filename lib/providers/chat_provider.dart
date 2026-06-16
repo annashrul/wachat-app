@@ -546,9 +546,10 @@ class ChatProvider extends ChangeNotifier {
         content: text, reply: replyingTo, statusRef: statusRef));
   }
 
-  void sendSticker(String conversationId, String sticker) {
+  void sendSticker(String conversationId, String sticker,
+      {StatusRef? statusRef}) {
     _addOptimistic(_optimistic(conversationId, 'STICKER',
-        content: sticker, reply: replyingTo));
+        content: sticker, reply: replyingTo, statusRef: statusRef));
   }
 
   void sendMedia(

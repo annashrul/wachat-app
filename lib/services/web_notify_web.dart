@@ -25,6 +25,39 @@ class WebNotify {
       if (html.Notification.permission != 'granted') return;
       // Jangan ganggu kalau tab sedang aktif/terlihat.
       if (html.document.visibilityState == 'visible') return;
+      // Di browser HP (Chrome Android), constructor `Notification` ilegal —
+      // notifikasi HARUS lewat service worker. Coba SW dulu, lalu fallback.
+      final sw = html.window.navigator.serviceWorker;
+      if (sw != null) {
+        _notifyViaSw(sw, title, body, icon);
+      } else {
+        _fallback(title, body, icon);
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _notifyViaSw(
+    html.ServiceWorkerContainer sw,
+    String title,
+    String body,
+    String? icon,
+  ) async {
+    try {
+      final reg = await sw.ready;
+      reg.showNotification(title, {
+        'body': body,
+        'icon': icon ?? 'favicon.svg',
+        'badge': 'favicon.svg',
+        'tag': 'wachat-msg',
+        'renotify': true,
+      });
+    } catch (_) {
+      _fallback(title, body, icon);
+    }
+  }
+
+  static void _fallback(String title, String body, String? icon) {
+    try {
       html.Notification(title, body: body, icon: icon ?? 'favicon.svg');
     } catch (_) {}
   }

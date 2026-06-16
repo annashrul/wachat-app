@@ -11,6 +11,7 @@ import '../providers/chat_provider.dart';
 import '../services/status_service.dart';
 import '../services/api_client.dart';
 import '../widgets/avatar.dart';
+import '../widgets/sticker_picker.dart';
 
 /// Satu "cerita" status milik seorang user.
 class StatusStory {
@@ -45,6 +46,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   final _replyCtrl = TextEditingController();
   final _replyFocus = FocusNode();
   bool _sendingReply = false;
+  bool _replyOpen = false; // mode balas terbuka (komposer + overlay)
 
   static const _staticDur = Duration(seconds: 5);
 
@@ -61,14 +63,43 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       })
       ..addListener(() => setState(() {}));
     // Saat mengetik balasan, jeda status agar tidak keburu pindah.
+    // Saat fokus hilang tapi mode balas masih terbuka (mis. keyboard turun /
+    // sheet stiker), status tetap dijeda — hanya lanjut saat balas ditutup.
     _replyFocus.addListener(() {
       if (_replyFocus.hasFocus) {
         _pause();
-      } else {
+      } else if (!_replyOpen) {
         _resume();
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  /// Konteks status yang sedang dilihat (untuk kutipan di pesan balasan).
+  StatusRef _currentRef() {
+    final s = _status;
+    return StatusRef(
+      type: s.type,
+      mediaUrl: s.mediaUrl,
+      text: s.text,
+      bgColor: s.bgColor,
+    );
+  }
+
+  /// Buka mode balas: redupkan status + tampilkan komposer di atas keyboard.
+  Future<void> _openReply() async {
+    if (_replyOpen || _story.isMine) return;
+    setState(() => _replyOpen = true);
+    _pause();
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (mounted) _replyFocus.requestFocus();
+  }
+
+  void _closeReply() {
+    if (!_replyOpen) return;
+    _replyFocus.unfocus();
+    setState(() => _replyOpen = false);
+    _resume();
   }
 
   Future<void> _sendReply() async {
@@ -81,21 +112,39 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     try {
       final conv = await chat.service.createDirect(userId);
       // Sertakan konteks status singkat agar penerima paham ini balasan status.
-      final s = _status;
-      final ref = StatusRef(
-        type: s.type,
-        mediaUrl: s.mediaUrl,
-        text: s.text,
-        bgColor: s.bgColor,
-      );
-      chat.sendText(conv.id, text, statusRef: ref);
+      chat.sendText(conv.id, text, statusRef: _currentRef());
       _replyCtrl.clear();
-      _replyFocus.unfocus();
       messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
     } finally {
-      if (mounted) setState(() => _sendingReply = false);
+      if (mounted) {
+        setState(() => _sendingReply = false);
+        _closeReply();
+      }
+    }
+  }
+
+  void _showReplyStickers() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => StickerPicker(onSelected: _sendStickerReply),
+    );
+  }
+
+  Future<void> _sendStickerReply(String sticker) async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final userId = _story.user.id;
+    try {
+      final conv = await chat.service.createDirect(userId);
+      chat.sendSticker(conv.id, sticker, statusRef: _currentRef());
+      messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    } finally {
+      if (mounted) _closeReply();
     }
   }
 
@@ -397,19 +446,32 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   @override
   Widget build(BuildContext context) {
     final s = _status;
+    final scheme = Theme.of(context).colorScheme;
     final colored = s.type == 'TEXT' || s.type == 'AUDIO';
     final liveCount =
         context.watch<StatusProvider>().viewCountById(s.id) ?? s.viewCount;
-    return Scaffold(
+    return PopScope(
+      canPop: !_replyOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeReply();
+      },
+      child: Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: colored ? _parseColor(s.bgColor) : Colors.black,
       body: GestureDetector(
         onTapUp: (d) {
+          if (_replyOpen) return;
           final w = MediaQuery.of(context).size.width;
           if (d.globalPosition.dx < w * 0.33) {
             _prev();
           } else {
             _next();
           }
+        },
+        // Swipe ke atas untuk membalas (ala WhatsApp).
+        onVerticalDragEnd: (d) {
+          if (_story.isMine || _replyOpen) return;
+          if ((d.primaryVelocity ?? 0) < -250) _openReply();
         },
         child: Stack(
           children: [
@@ -479,115 +541,230 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                 ],
               ),
             ),
+            // Redup status saat sedang membalas (overlay ala WhatsApp).
+            if (_replyOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _closeReply,
+                  child: Container(color: Colors.black.withValues(alpha: 0.55)),
+                ),
+              ),
+            // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                      left: 16,
-                      right: 16,
-                      top: 8,
-                      bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (s.type != 'TEXT' &&
-                          s.type != 'AUDIO' &&
-                          (s.caption?.isNotEmpty ?? false))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(s.caption!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white)),
-                        ),
-                      if (_story.isMine)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            InkWell(
-                              onTap: _showViewers,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 6),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.visibility_rounded,
-                                        color: Colors.white70, size: 18),
-                                    const SizedBox(width: 6),
-                                    Text('$liveCount dilihat',
-                                        style: const TextStyle(
-                                            color: Colors.white70)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            TextButton.icon(
-                              onPressed: _deleteCurrent,
-                              icon: const Icon(Icons.delete_rounded,
-                                  color: Colors.white),
-                              label: const Text('Hapus',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
-                          ],
-                        )
-                      else
-                        // Balas status (ala WhatsApp) → kirim pesan ke pemilik.
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white24,
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: TextField(
-                                  controller: _replyCtrl,
-                                  focusNode: _replyFocus,
-                                  style: const TextStyle(color: Colors.white),
-                                  textInputAction: TextInputAction.send,
-                                  onSubmitted: (_) => _sendReply(),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    hintText: 'Balas…',
-                                    hintStyle: TextStyle(color: Colors.white70),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _sendReply,
-                              child: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: _sendingReply
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(13),
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white),
-                                      )
-                                    : const Icon(Icons.send_rounded,
-                                        color: Colors.white, size: 20),
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_replyOpen &&
+                            s.type != 'TEXT' &&
+                            s.type != 'AUDIO' &&
+                            (s.caption?.isNotEmpty ?? false))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(s.caption!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                        if (_story.isMine)
+                          _ownerActions(liveCount)
+                        else if (_replyOpen)
+                          _replyComposer(scheme)
+                        else
+                          _swipeHint(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  /// Aksi untuk status milik sendiri: jumlah penonton + hapus.
+  Widget _ownerActions(int liveCount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        InkWell(
+          onTap: _showViewers,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.visibility_rounded,
+                    color: Colors.white70, size: 18),
+                const SizedBox(width: 6),
+                Text('$liveCount dilihat',
+                    style: const TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: _deleteCurrent,
+          icon: const Icon(Icons.delete_rounded, color: Colors.white),
+          label: const Text('Hapus', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+
+  /// Shortcut "geser ke atas untuk membalas" (ala WhatsApp).
+  Widget _swipeHint() {
+    return GestureDetector(
+      onTap: _openReply,
+      behavior: HitTestBehavior.opaque,
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white, size: 28),
+            Text('Balas',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Komposer balasan: thumbnail status + emoji/stiker + input + kirim.
+  Widget _replyComposer(ColorScheme scheme) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _replyStatusChip(),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.emoji_emotions_outlined,
+                          color: Colors.white70),
+                      onPressed: _showReplyStickers,
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _replyCtrl,
+                        focusNode: _replyFocus,
+                        minLines: 1,
+                        maxLines: 4,
+                        style: const TextStyle(color: Colors.white),
+                        cursorColor: Colors.white,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendReply(),
+                        decoration: const InputDecoration(
+                          hintText: 'Balas…',
+                          hintStyle: TextStyle(color: Colors.white70),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _sendReply,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: _sendingReply
+                    ? const Padding(
+                        padding: EdgeInsets.all(15),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 22),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Chip kecil "Membalas status …" dengan thumbnail status.
+  Widget _replyStatusChip() {
+    final s = _status;
+    Widget thumb;
+    if (s.type == 'TEXT') {
+      thumb = Container(
+        color: _parseColor(s.bgColor),
+        alignment: Alignment.center,
+        child: const Icon(Icons.title, color: Colors.white, size: 16),
+      );
+    } else if (s.type == 'AUDIO') {
+      thumb = Container(
+        color: Colors.black45,
+        alignment: Alignment.center,
+        child: const Icon(Icons.music_note, color: Colors.white, size: 16),
+      );
+    } else {
+      thumb = s.mediaUrl != null
+          ? CachedNetworkImage(imageUrl: s.mediaUrl!, fit: BoxFit.cover)
+          : Container(color: Colors.black45);
+    }
+    final label = _story.isMine
+        ? 'Membalas status Anda'
+        : 'Membalas status ${_story.user.displayName}';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(7),
+              child: SizedBox(width: 34, height: 34, child: thumb),
+            ),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
           ],
         ),
       ),
