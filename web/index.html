@@ -45,6 +45,35 @@
   -->
   <script src="flutter_bootstrap.js" async></script>
 
+  <!-- Banner "Buka di aplikasi": muncul di atas saat dibuka di browser Android -->
+  <div id="open-in-app" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:#202c33; color:#fff; padding:10px 12px; align-items:center; gap:10px; box-shadow:0 2px 12px rgba(0,0,0,.3); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+    <img src="icons/Icon-192.png" width="36" height="36" style="border-radius:8px"/>
+    <div style="flex:1; min-width:0">
+      <div style="font-weight:600; font-size:14px">WAChat</div>
+      <div style="font-size:12px; color:#8696a0">Buka lebih nyaman di aplikasi</div>
+    </div>
+    <button id="open-in-app-btn" style="background:#00a884; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer">Buka</button>
+    <button id="open-in-app-close" aria-label="Tutup" style="background:transparent; color:#8696a0; border:none; font-size:22px; cursor:pointer; line-height:1">&times;</button>
+  </div>
+  <script>
+    (function () {
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var standalone = window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+      if (!isAndroid || standalone) return;
+      var el = document.getElementById('open-in-app');
+      if (el) el.style.display = 'flex';
+      document.addEventListener('click', function (ev) {
+        if (ev.target && ev.target.id === 'open-in-app-btn') {
+          // Buka app via skema kustom (jika terpasang). Web tetap jalan bila tidak.
+          window.location.href = 'wachat://open';
+        } else if (ev.target && ev.target.id === 'open-in-app-close') {
+          if (el) el.style.display = 'none';
+        }
+      });
+    })();
+  </script>
+
   <!-- Banner pasang PWA: muncul di bawah bila app belum terpasang -->
   <div id="pwa-install" style="display:none; position:fixed; left:12px; right:12px; bottom:12px; z-index:99999; background:#202c33; color:#fff; border-radius:12px; padding:10px 12px; align-items:center; gap:12px; box-shadow:0 6px 24px rgba(0,0,0,.35); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
     <img src="icons/Icon-192.png" width="42" height="42" style="border-radius:9px"/>

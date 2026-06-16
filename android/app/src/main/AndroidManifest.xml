@@ -41,12 +41,13 @@
                     android:host="wachat-backend-1018591685581.asia-southeast2.run.app"
                     android:pathPrefix="/contact"/>
             </intent-filter>
-            <!-- Skema kustom: wachat://contact?token=... -->
+            <!-- Skema kustom: wachat://contact?token=... & wachat://open -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="wachat" android:host="contact"/>
+                <data android:scheme="wachat" android:host="open"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
