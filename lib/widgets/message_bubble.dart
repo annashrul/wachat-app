@@ -488,6 +488,9 @@ class MessageBubble extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 5),
+      // Lebar mengikuti konten (tidak full), dengan batas atas agar label
+      // panjang tetap ringkas — jadi gelembung tidak melebar penuh.
+      constraints: const BoxConstraints(maxWidth: 230),
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
@@ -495,10 +498,11 @@ class MessageBubble extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(width: 3, color: scheme.primary),
-            Expanded(
+            Flexible(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 5, 6, 5),
                 child: Column(
