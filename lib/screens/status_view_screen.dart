@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -475,6 +476,23 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         },
         child: Stack(
           children: [
+            // Latar penuh layar: versi blur dari media supaya tidak ada area
+            // hitam (letterbox) di sisi/atas-bawah. Dengan begitu latar di
+            // belakang konten & komposer balasan jadi SATU warna, tidak
+            // tumpang tindih hitam + warna status.
+            if ((s.type == 'IMAGE' || s.type == 'VIDEO') &&
+                (s.mediaUrl?.isNotEmpty ?? false))
+              Positioned.fill(
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                  child: CachedNetworkImage(
+                    imageUrl: s.mediaUrl!,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) =>
+                        const ColoredBox(color: Colors.black),
+                  ),
+                ),
+              ),
             Positioned.fill(child: Center(child: _content(s))),
             // Tombol navigasi prev/next.
             if (!(_s == 0 && _i == 0))
@@ -542,27 +560,13 @@ class _StatusViewScreenState extends State<StatusViewScreen>
               ),
             ),
             // Redup status saat sedang membalas (overlay ala WhatsApp).
-            // Gradien: makin gelap ke bawah dan menjadi satu warna solid di
-            // area komposer — supaya tidak ada "dua warna" / garis sambungan
-            // antara konten status dan latar di belakang form balasan.
+            // SATU warna rata di seluruh layar — tidak ada gradien/garis
+            // sambungan, jadi latar di belakang form balasan seragam.
             if (_replyOpen)
               Positioned.fill(
                 child: GestureDetector(
                   onTap: _closeReply,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.25),
-                          Colors.black.withValues(alpha: 0.55),
-                          Colors.black.withValues(alpha: 0.92),
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
-                    ),
-                  ),
+                  child: const ColoredBox(color: Color(0x99000000)),
                 ),
               ),
             // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
