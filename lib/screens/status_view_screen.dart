@@ -129,8 +129,12 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   void _showReplyStickers() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => StickerPicker(onSelected: _sendStickerReply),
+      // Warna gelap tetap (bukan ikut tema) agar konsisten di status viewer.
+      backgroundColor: const Color(0xFF1F2C33),
+      builder: (_) => Theme(
+        data: ThemeData.dark(useMaterial3: true),
+        child: StickerPicker(onSelected: _sendStickerReply),
+      ),
     );
   }
 
@@ -697,49 +701,43 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                decoration: BoxDecoration(
-                  // Tembus pandang ringan — bukan warna solid gelap.
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(26),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.28)),
+          child: Container(
+            decoration: BoxDecoration(
+              // Pill tipis tembus pandang — status terlihat di belakangnya,
+              // konsisten (tidak ikut warna konten/tema), bukan kotak solid.
+              color: Colors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.emoji_emotions_outlined,
+                      color: Colors.white),
+                  onPressed: _showReplyStickers,
                 ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.emoji_emotions_outlined,
-                          color: Colors.white),
-                      onPressed: _showReplyStickers,
+                Expanded(
+                  child: TextField(
+                    controller: _replyCtrl,
+                    focusNode: _replyFocus,
+                    minLines: 1,
+                    maxLines: 4,
+                    style: const TextStyle(color: Colors.white),
+                    cursorColor: Colors.white,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendReply(),
+                    decoration: const InputDecoration(
+                      hintText: 'Balas…',
+                      hintStyle: TextStyle(color: Colors.white70),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 11),
                     ),
-                    Expanded(
-                      child: TextField(
-                        controller: _replyCtrl,
-                        focusNode: _replyFocus,
-                        minLines: 1,
-                        maxLines: 4,
-                        style: const TextStyle(color: Colors.white),
-                        cursorColor: Colors.white,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _sendReply(),
-                        decoration: const InputDecoration(
-                          hintText: 'Balas…',
-                          hintStyle: TextStyle(color: Colors.white70),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 6),
+              ],
             ),
           ),
         ),
