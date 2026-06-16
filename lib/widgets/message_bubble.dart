@@ -225,6 +225,7 @@ class MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
+            if (message.statusRef != null) _statusQuote(context, palette),
             if (message.replyTo != null) _replyQuote(context, palette),
             if (_firstUrl != null)
               LinkPreviewCard(url: _firstUrl!, mine: isMine),
@@ -430,6 +431,144 @@ class MessageBubble extends StatelessWidget {
       ),
       ),
     );
+  }
+
+  /// Kutipan status yang dibalas (mini thumbnail ala WhatsApp).
+  Widget _statusQuote(BuildContext context, AppPalette palette) {
+    final s = message.statusRef!;
+    final scheme = Theme.of(context).colorScheme;
+    final textColor = isMine ? palette.outgoingText : palette.incomingText;
+
+    String label;
+    Widget thumb;
+    switch (s.type) {
+      case 'VIDEO':
+        label = '📹 Video';
+        thumb = _quadThumb(
+          child: s.mediaUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: s.mediaUrl!,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, _, _) =>
+                      const Icon(Icons.videocam, size: 18),
+                )
+              : const Icon(Icons.videocam, size: 18),
+          overlay: const Icon(Icons.play_arrow, color: Colors.white, size: 16),
+        );
+        break;
+      case 'AUDIO':
+        label = '🎵 Audio';
+        thumb = _quadThumb(
+          color: scheme.primary,
+          child: const Icon(Icons.music_note, color: Colors.white, size: 18),
+        );
+        break;
+      case 'TEXT':
+        label = s.text != null && s.text!.trim().isNotEmpty
+            ? s.text!
+            : 'Status teks';
+        thumb = _quadThumb(
+          color: _parseColor(s.bgColor) ?? scheme.primary,
+          child: const Icon(Icons.title, color: Colors.white, size: 18),
+        );
+        break;
+      default: // IMAGE
+        label = '📷 Foto';
+        thumb = _quadThumb(
+          child: s.mediaUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: s.mediaUrl!,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, _, _) =>
+                      const Icon(Icons.image, size: 18),
+                )
+              : const Icon(Icons.image, size: 18),
+        );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 3, color: scheme.primary),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 5, 6, 5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            size: 12, color: scheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Status',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: scheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: textColor.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(4),
+              child: thumb,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quadThumb({Widget? child, Color? color, Widget? overlay}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 38,
+        height: 38,
+        color: color ?? Colors.black12,
+        alignment: Alignment.center,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ?child,
+            if (overlay != null) Center(child: overlay),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color? _parseColor(String? hex) {
+    if (hex == null) return null;
+    var h = hex.replaceAll('#', '').trim();
+    if (h.length == 6) h = 'FF$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? null : Color(v);
   }
 
   Widget _buildContent(BuildContext context, AppPalette palette) {

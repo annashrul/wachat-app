@@ -1,5 +1,41 @@
+import 'dart:convert';
+
 /// Status pengiriman pesan (untuk centang ala WhatsApp).
 enum MessageStatus { pending, sent, delivered, read }
+
+/// Konteks status yang dibalas (kutipan thumbnail di gelembung).
+class StatusRef {
+  final String type; // IMAGE | VIDEO | TEXT | AUDIO
+  final String? mediaUrl;
+  final String? text;
+  final String? bgColor;
+  const StatusRef({required this.type, this.mediaUrl, this.text, this.bgColor});
+
+  factory StatusRef.fromJson(Map<String, dynamic> j) => StatusRef(
+        type: j['type'] as String? ?? 'IMAGE',
+        mediaUrl: j['mediaUrl'] as String?,
+        text: j['text'] as String?,
+        bgColor: j['bgColor'] as String?,
+      );
+
+  static StatusRef? tryParse(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return StatusRef.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        if (mediaUrl != null) 'mediaUrl': mediaUrl,
+        if (text != null) 'text': text,
+        if (bgColor != null) 'bgColor': bgColor,
+      };
+
+  String encode() => jsonEncode(toJson());
+}
 
 /// Ringkasan pesan yang dibalas (untuk kutipan reply).
 class ReplyPreview {
@@ -49,6 +85,7 @@ class Message {
   final bool deleted;
   final String? replyToId;
   final ReplyPreview? replyTo;
+  final StatusRef? statusRef;
 
   Message({
     required this.id,
@@ -67,6 +104,7 @@ class Message {
     this.deleted = false,
     this.replyToId,
     this.replyTo,
+    this.statusRef,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -91,6 +129,7 @@ class Message {
       replyTo: json['replyTo'] != null
           ? ReplyPreview.fromJson(json['replyTo'] as Map<String, dynamic>)
           : null,
+      statusRef: StatusRef.tryParse(json['statusRef'] as String?),
     );
   }
 

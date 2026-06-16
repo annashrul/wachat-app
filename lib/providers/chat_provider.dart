@@ -482,7 +482,11 @@ class ChatProvider extends ChangeNotifier {
 
   // ===== Kirim pesan (optimistic) =====
   Message _optimistic(String convId, String type,
-      {String? content, String? mediaUrl, String? mediaName, Message? reply}) {
+      {String? content,
+      String? mediaUrl,
+      String? mediaName,
+      Message? reply,
+      StatusRef? statusRef}) {
     final tempId =
         'temp_${DateTime.now().microsecondsSinceEpoch}_${_tempCounter++}';
     return Message(
@@ -506,6 +510,7 @@ class ChatProvider extends ChangeNotifier {
               mediaName: reply.mediaName,
               senderName: reply.senderName ?? 'Pengguna',
             ),
+      statusRef: statusRef,
     );
   }
 
@@ -517,6 +522,7 @@ class ChatProvider extends ChangeNotifier {
       if (m.mediaUrl != null) 'mediaUrl': m.mediaUrl,
       if (m.mediaName != null) 'mediaName': m.mediaName,
       if (m.replyToId != null) 'replyToId': m.replyToId,
+      if (m.statusRef != null) 'statusRef': m.statusRef!.encode(),
       'clientTempId': m.clientTempId,
     });
   }
@@ -535,9 +541,9 @@ class ChatProvider extends ChangeNotifier {
     _emitSend(m);
   }
 
-  void sendText(String conversationId, String text) {
-    _addOptimistic(
-        _optimistic(conversationId, 'TEXT', content: text, reply: replyingTo));
+  void sendText(String conversationId, String text, {StatusRef? statusRef}) {
+    _addOptimistic(_optimistic(conversationId, 'TEXT',
+        content: text, reply: replyingTo, statusRef: statusRef));
   }
 
   void sendSticker(String conversationId, String sticker) {

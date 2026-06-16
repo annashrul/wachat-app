@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/status.dart';
+import '../models/message.dart';
 import '../models/user.dart';
 import '../providers/status_provider.dart';
 import '../providers/chat_provider.dart';
@@ -80,7 +81,14 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     try {
       final conv = await chat.service.createDirect(userId);
       // Sertakan konteks status singkat agar penerima paham ini balasan status.
-      chat.sendText(conv.id, text);
+      final s = _status;
+      final ref = StatusRef(
+        type: s.type,
+        mediaUrl: s.mediaUrl,
+        text: s.text,
+        bgColor: s.bgColor,
+      );
+      chat.sendText(conv.id, text, statusRef: ref);
       _replyCtrl.clear();
       _replyFocus.unfocus();
       messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
