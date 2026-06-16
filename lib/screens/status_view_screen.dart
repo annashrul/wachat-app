@@ -690,28 +690,30 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     );
   }
 
-  /// Komposer balasan: thumbnail status + emoji/stiker + input + kirim.
+  /// Komposer balasan ala WhatsApp: pill "frosted" tembus pandang (status
+  /// terlihat di belakangnya, tidak ada blok hitam) + emoji + tombol kirim.
   Widget _replyComposer(ColorScheme scheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        _replyStatusChip(),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
+                  // Tembus pandang ringan — bukan warna solid gelap.
+                  color: Colors.white.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: Colors.white24),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.28)),
                 ),
                 child: Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.emoji_emotions_outlined,
-                          color: Colors.white70),
+                          color: Colors.white),
                       onPressed: _showReplyStickers,
                     ),
                     Expanded(
@@ -730,86 +732,37 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(vertical: 11),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                   ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _sendReply,
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: _sendingReply
-                    ? const Padding(
-                        padding: EdgeInsets.all(15),
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.send_rounded,
-                        color: Colors.white, size: 22),
-              ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _sendReply,
+          child: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              shape: BoxShape.circle,
             ),
-          ],
+            child: _sendingReply
+                ? const Padding(
+                    padding: EdgeInsets.all(15),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+          ),
         ),
       ],
-    );
-  }
-
-  /// Chip kecil "Membalas status …" dengan thumbnail status.
-  Widget _replyStatusChip() {
-    final s = _status;
-    Widget thumb;
-    if (s.type == 'TEXT') {
-      thumb = Container(
-        color: _parseColor(s.bgColor),
-        alignment: Alignment.center,
-        child: const Icon(Icons.title, color: Colors.white, size: 16),
-      );
-    } else if (s.type == 'AUDIO') {
-      thumb = Container(
-        color: Colors.black45,
-        alignment: Alignment.center,
-        child: const Icon(Icons.music_note, color: Colors.white, size: 16),
-      );
-    } else {
-      thumb = s.mediaUrl != null
-          ? CachedNetworkImage(imageUrl: s.mediaUrl!, fit: BoxFit.cover)
-          : Container(color: Colors.black45);
-    }
-    final label = _story.isMine
-        ? 'Membalas status Anda'
-        : 'Membalas status ${_story.user.displayName}';
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(7),
-              child: SizedBox(width: 34, height: 34, child: thumb),
-            ),
-            const SizedBox(width: 8),
-            Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
-          ],
-        ),
-      ),
     );
   }
 }
