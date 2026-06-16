@@ -6,7 +6,9 @@ import 'package:just_audio/just_audio.dart';
 import '../models/status.dart';
 import '../models/user.dart';
 import '../providers/status_provider.dart';
+import '../providers/chat_provider.dart';
 import '../services/status_service.dart';
+import '../services/api_client.dart';
 import '../widgets/avatar.dart';
 
 /// Satu "cerita" status milik seorang user.
@@ -39,6 +41,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   late int _s;
   int _i = 0;
   bool _advanced = false; // cegah maju ganda
+  final _replyCtrl = TextEditingController();
+  final _replyFocus = FocusNode();
+  bool _sendingReply = false;
 
   static const _staticDur = Duration(seconds: 5);
 
@@ -54,7 +59,36 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         if (s == AnimationStatus.completed) _next();
       })
       ..addListener(() => setState(() {}));
+    // Saat mengetik balasan, jeda status agar tidak keburu pindah.
+    _replyFocus.addListener(() {
+      if (_replyFocus.hasFocus) {
+        _pause();
+      } else {
+        _resume();
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  Future<void> _sendReply() async {
+    final text = _replyCtrl.text.trim();
+    if (text.isEmpty || _sendingReply) return;
+    setState(() => _sendingReply = true);
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final userId = _story.user.id;
+    try {
+      final conv = await chat.service.createDirect(userId);
+      // Sertakan konteks status singkat agar penerima paham ini balasan status.
+      chat.sendText(conv.id, text);
+      _replyCtrl.clear();
+      _replyFocus.unfocus();
+      messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _sendingReply = false);
+    }
   }
 
   Future<void> _disposeMedia() async {
@@ -217,6 +251,8 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     _ctrl.dispose();
     _video?.dispose();
     _audio?.dispose();
+    _replyCtrl.dispose();
+    _replyFocus.dispose();
     super.dispose();
   }
 
@@ -441,7 +477,11 @@ class _StatusViewScreenState extends State<StatusViewScreen>
               bottom: 0,
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 8,
+                      bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -483,6 +523,55 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                                   color: Colors.white),
                               label: const Text('Hapus',
                                   style: TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        )
+                      else
+                        // Balas status (ala WhatsApp) → kirim pesan ke pemilik.
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: TextField(
+                                  controller: _replyCtrl,
+                                  focusNode: _replyFocus,
+                                  style: const TextStyle(color: Colors.white),
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => _sendReply(),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: 'Balas…',
+                                    hintStyle: TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: _sendReply,
+                              child: Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: _sendingReply
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(13),
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white),
+                                      )
+                                    : const Icon(Icons.send_rounded,
+                                        color: Colors.white, size: 20),
+                              ),
                             ),
                           ],
                         ),
