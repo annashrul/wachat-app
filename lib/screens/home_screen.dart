@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _searching = false;
   String _filter = 'all'; // all | unread | favorite | group
   final Set<String> _selected = {}; // mode pilih banyak chat
+  Conversation? _selectedConv; // chat aktif di panel kanan (layar lebar)
   final _searchCtrl = TextEditingController();
   String _query = '';
   final _appLinks = AppLinks();
@@ -121,7 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final call = context.watch<CallProvider>();
     final unread = context.watch<ChatProvider>().totalUnread;
     WebNotify.setUnread(unread); // badge favicon + judul tab (web)
-    return Scaffold(
+    // Layar lebar (web/desktop) → dua panel ala WhatsApp Web.
+    final wide = MediaQuery.of(context).size.width >= 900;
+    final shell = Scaffold(
       body: IndexedStack(
         index: _tab,
         children: [
@@ -174,6 +177,43 @@ class _HomeScreenState extends State<HomeScreen> {
             selectedIcon: Icon(Icons.people_rounded),
             label: 'Kontak',
           ),
+        ],
+      ),
+    );
+
+    if (!wide) return shell;
+
+    // Dua panel: daftar (kiri, lebar tetap) + room chat (kanan).
+    final palette = AppPalette.of(context);
+    return Scaffold(
+      body: Row(
+        children: [
+          SizedBox(width: 400, child: shell),
+          VerticalDivider(width: 1, color: palette.cardBorder),
+          Expanded(
+            child: _selectedConv == null
+                ? _chatPlaceholder(palette)
+                : ChatScreen(
+                    key: ValueKey(_selectedConv!.id),
+                    conversation: _selectedConv!,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chatPlaceholder(AppPalette palette) {
+    return Container(
+      color: palette.chatBackground,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.chat_bubble_outline_rounded, size: 72, color: palette.muted),
+          const SizedBox(height: 16),
+          Text('Pilih chat untuk mulai mengobrol',
+              style: TextStyle(color: palette.muted, fontSize: 15)),
         ],
       ),
     );
@@ -379,13 +419,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       final lastMine = c.lastMessage != null &&
                           c.lastMessage!.senderId == myId;
                       final showTick = lastMine && !isTyping;
-                      final selected = _selected.contains(c.id);
+                      final inSelection = _selected.contains(c.id);
+                      final active = _selectedConv?.id == c.id &&
+                          MediaQuery.of(context).size.width >= 900;
+                      final selected = inSelection;
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 6,
                         ),
-                        selected: selected,
+                        selected: selected || active,
                         selectedTileColor:
                             scheme.primary.withValues(alpha: 0.08),
                         leading: selected
@@ -733,9 +776,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openChat(Conversation c) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ChatScreen(conversation: c)),
-    );
+    if (MediaQuery.of(context).size.width >= 900) {
+      // Layar lebar: tampilkan di panel kanan, bukan halaman baru.
+      setState(() => _selectedConv = c);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ChatScreen(conversation: c)),
+      );
+    }
   }
 
 }
