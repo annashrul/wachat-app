@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/socket_service.dart';
 import '../services/notification_service.dart';
+import '../services/app_badge.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -99,6 +100,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await AppBadge.set(0);
     await NotificationService.instance.unregister();
     _socket.disconnect();
     await _auth.logout();

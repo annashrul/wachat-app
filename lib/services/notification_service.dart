@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../screens/chat_screen.dart';
 import 'api_client.dart';
+import 'app_badge.dart';
 
 /// Channel notifikasi pesan (dipakai di main & background isolate).
 const AndroidNotificationChannel _messagesChannel = AndroidNotificationChannel(
@@ -80,7 +81,8 @@ Future<Uint8List?> _downloadBytes(String url) async {
 
 /// Bangun & tampilkan notifikasi gaya WhatsApp (avatar + nama + pesan + waktu)
 /// dari payload data FCM. Top-level agar bisa dipanggil dari background isolate.
-Future<void> showWhatsAppNotification(Map<String, dynamic> data) async {
+Future<void> showWhatsAppNotification(Map<String, dynamic> data,
+    {int? badgeNumber}) async {
   final convId = (data['conversationId'] as String?) ?? '';
   final title = (data['title'] as String?) ?? 'Pesan baru';
   final fallbackBody = (data['body'] as String?) ?? '';
@@ -124,6 +126,7 @@ Future<void> showWhatsAppNotification(Map<String, dynamic> data) async {
     color: const Color(0xFF2563EB),
     category: AndroidNotificationCategory.message,
     styleInformation: style,
+    number: badgeNumber, // jumlah untuk badge ikon launcher
     largeIcon:
         avatarBytes == null ? null : ByteArrayAndroidBitmap(avatarBytes),
   );
@@ -192,7 +195,9 @@ Future<void> _firebaseBgHandler(RemoteMessage message) async {
   if (message.data['type'] == 'call') {
     await showCallNotification(message.data);
   } else {
-    await showWhatsAppNotification(message.data);
+    // Naikkan badge ikon launcher (app tertutup → hitung sendiri).
+    final n = await AppBadge.increment();
+    await showWhatsAppNotification(message.data, badgeNumber: n);
   }
 }
 

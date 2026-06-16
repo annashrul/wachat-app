@@ -7,6 +7,7 @@ import '../services/chat_service.dart';
 import '../services/socket_service.dart';
 import '../services/notification_service.dart';
 import '../services/web_notify.dart';
+import '../services/app_badge.dart';
 
 /// Mengelola daftar percakapan + pesan percakapan aktif, status koneksi,
 /// indikator mengetik (per percakapan), dan tanda terima (centang).
@@ -106,7 +107,10 @@ class ChatProvider extends ChangeNotifier {
   /// akan ter-update sampai tab kembali aktif. Memanggilnya di sini (dari
   /// handler event socket) memastikan badge naik/turun seketika walau tab
   /// sedang tidak terlihat.
-  void _syncWebBadge() => WebNotify.setUnread(totalUnread);
+  void _syncWebBadge() {
+    WebNotify.setUnread(totalUnread); // badge web (judul tab + favicon)
+    AppBadge.set(totalUnread); // badge ikon launcher (Android)
+  }
 
   Conversation? conversationById(String id) {
     for (final c in conversations) {
