@@ -106,8 +106,14 @@ class Message {
   final String? replyToId;
   final ReplyPreview? replyTo;
   final StatusRef? statusRef;
+  final DateTime? expiresAt; // disappearing
+  final bool viewOnce;
+  bool viewOnceSeen; // mutable: jadi true saat dibuka
   // Reaksi emoji (mutable agar bisa diperbarui in-place saat event socket).
   List<MessageReaction> reactions;
+
+  bool get isExpired =>
+      expiresAt != null && expiresAt!.isBefore(DateTime.now());
 
   Message({
     required this.id,
@@ -127,6 +133,9 @@ class Message {
     this.replyToId,
     this.replyTo,
     this.statusRef,
+    this.expiresAt,
+    this.viewOnce = false,
+    this.viewOnceSeen = false,
     this.reactions = const [],
   });
 
@@ -153,6 +162,10 @@ class Message {
           ? ReplyPreview.fromJson(json['replyTo'] as Map<String, dynamic>)
           : null,
       statusRef: StatusRef.tryParse(json['statusRef'] as String?),
+      expiresAt:
+          DateTime.tryParse(json['expiresAt'] as String? ?? '')?.toLocal(),
+      viewOnce: json['viewOnce'] == true,
+      viewOnceSeen: json['viewOnceSeen'] == true,
       reactions: MessageReaction.listFrom(json['reactions']),
     );
   }

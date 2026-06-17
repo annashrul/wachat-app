@@ -12,6 +12,7 @@ class Conversation {
   int unreadCount;
   DateTime updatedAt;
   bool muted; // notifikasi dibisukan untuk user ini
+  int disappearingSeconds; // 0 = nonaktif
 
   // userId -> kapan terakhir membaca / menerima (untuk centang).
   final Map<String, DateTime> readAt;
@@ -28,6 +29,7 @@ class Conversation {
     this.unreadCount = 0,
     required this.updatedAt,
     this.muted = false,
+    this.disappearingSeconds = 0,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
   })  : readAt = readAt ?? {},
@@ -91,6 +93,7 @@ class Conversation {
           : null,
       unreadCount: json['unreadCount'] as int? ?? 0,
       muted: json['muted'] == true,
+      disappearingSeconds: json['disappearingSeconds'] as int? ?? 0,
       updatedAt:
           DateTime.tryParse(json['updatedAt'] as String? ?? '')?.toLocal() ??
           DateTime.now(),

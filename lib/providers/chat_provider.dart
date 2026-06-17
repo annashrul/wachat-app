@@ -67,6 +67,7 @@ class ChatProvider extends ChangeNotifier {
   // conversationId -> userId yang sedang mengetik (semua percakapan).
   final Map<String, Set<String>> typingByConv = {};
   final Map<String, Timer> _typingTimers = {};
+  Timer? _expiryTimer; // buang pesan disappearing yang kedaluwarsa
 
   // Cache pesan & draft input per percakapan.
   final Map<String, List<Message>> _messageCache = {};
@@ -127,6 +128,8 @@ class ChatProvider extends ChangeNotifier {
     _loadFavorites();
     _loadArchived();
     loadStarred();
+    _expiryTimer ??=
+        Timer.periodic(const Duration(seconds: 20), (_) => purgeExpiredLocal());
   }
 
   // ===== Favorit (disimpan lokal per perangkat) =====
@@ -287,6 +290,7 @@ class ChatProvider extends ChangeNotifier {
       'message:delivered',
       'message:deleted',
       'message:reaction',
+      'message:viewonce',
       'presence',
     ]) {
       _socket.off(e);
@@ -344,6 +348,13 @@ class ChatProvider extends ChangeNotifier {
         map['conversationId'] as String?,
         map['messageId'] as String,
         MessageReaction.listFrom(map['reactions']),
+      );
+    });
+    _socket.on('message:viewonce', (data) {
+      final map = Map<String, dynamic>.from(data as Map);
+      _onViewOnce(
+        map['conversationId'] as String?,
+        map['messageId'] as String,
       );
     });
     _socket.on('presence', (data) {
@@ -630,7 +641,8 @@ class ChatProvider extends ChangeNotifier {
       String? mediaUrl,
       String? mediaName,
       Message? reply,
-      StatusRef? statusRef}) {
+      StatusRef? statusRef,
+      bool viewOnce = false}) {
     final tempId =
         'temp_${DateTime.now().microsecondsSinceEpoch}_${_tempCounter++}';
     return Message(
@@ -655,6 +667,7 @@ class ChatProvider extends ChangeNotifier {
               senderName: reply.senderName ?? 'Pengguna',
             ),
       statusRef: statusRef,
+      viewOnce: viewOnce,
     );
   }
 
@@ -662,6 +675,7 @@ class ChatProvider extends ChangeNotifier {
     _socket.emit('message:send', {
       'conversationId': m.conversationId,
       'type': m.type,
+      if (m.viewOnce) 'viewOnce': true,
       if (m.content != null) 'content': m.content,
       if (m.mediaUrl != null) 'mediaUrl': m.mediaUrl,
       if (m.mediaName != null) 'mediaName': m.mediaName,
@@ -708,12 +722,58 @@ class ChatProvider extends ChangeNotifier {
     required String mediaUrl,
     required String mediaName,
     String? content,
+    bool viewOnce = false,
   }) {
     _addOptimistic(_optimistic(conversationId, type,
         mediaUrl: mediaUrl,
         mediaName: mediaName,
         content: content,
-        reply: replyingTo));
+        reply: replyingTo,
+        viewOnce: viewOnce));
+  }
+
+  /// Atur timer disappearing untuk percakapan.
+  Future<void> setDisappearing(String conversationId, int seconds) async {
+    final c = conversationById(conversationId);
+    final prev = c?.disappearingSeconds ?? 0;
+    if (c != null) c.disappearingSeconds = seconds;
+    notifyListeners();
+    try {
+      await _chat.setDisappearing(conversationId, seconds);
+    } catch (_) {
+      if (c != null) c.disappearingSeconds = prev;
+      notifyListeners();
+    }
+  }
+
+  /// Tandai pesan sekali-lihat sudah dibuka (kirim ke server + lokal).
+  void markViewOnce(String messageId) {
+    _socket.emit('message:viewonce', {'messageId': messageId});
+  }
+
+  void _onViewOnce(String? convId, String messageId) {
+    for (final m in messages) {
+      if (m.id == messageId) m.viewOnceSeen = true;
+    }
+    if (convId != null) {
+      for (final m in (_messageCache[convId] ?? <Message>[])) {
+        if (m.id == messageId) m.viewOnceSeen = true;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Buang pesan yang sudah kedaluwarsa dari tampilan & cache (disappearing).
+  void purgeExpiredLocal() {
+    var changed = messages.any((m) => m.isExpired);
+    messages.removeWhere((m) => m.isExpired);
+    for (final list in _messageCache.values) {
+      if (list.any((m) => m.isExpired)) {
+        list.removeWhere((m) => m.isExpired);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
   }
 
   void setTyping(String conversationId, bool isTyping) {

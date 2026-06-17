@@ -22,6 +22,8 @@ class MessageBubble extends StatelessWidget {
   final void Function(String messageId)? onQuoteTap;
   // Ketuk event panggilan → telepon balik.
   final VoidCallback? onCallBack;
+  // Ketuk media sekali-lihat → tandai sudah dibuka.
+  final void Function(String messageId)? onViewOnce;
 
   const MessageBubble({
     super.key,
@@ -33,6 +35,7 @@ class MessageBubble extends StatelessWidget {
     this.starred = false,
     this.onQuoteTap,
     this.onCallBack,
+    this.onViewOnce,
   });
 
   Widget _highlightedText(Color textColor, String query) {
@@ -670,6 +673,48 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Konten media "sekali lihat".
+  Widget _viewOnceContent(Color textColor) {
+    final seen = message.viewOnceSeen;
+    final canOpen = !seen && !isMine && message.mediaUrl != null;
+    final label = seen
+        ? 'Dibuka'
+        : isMine
+            ? 'Foto • sekali lihat'
+            : 'Buka sekali lihat';
+    final body = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: textColor, width: 1.5),
+          ),
+          child: Icon(
+            seen ? Icons.check_rounded : Icons.looks_one_rounded,
+            size: 18,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(label,
+            style: TextStyle(
+                color: textColor,
+                fontStyle: seen ? FontStyle.italic : FontStyle.normal)),
+      ],
+    );
+    if (!canOpen) return body;
+    return GestureDetector(
+      onTap: () {
+        _open(message.mediaUrl); // buka gambar
+        onViewOnce?.call(message.id); // tandai sudah dibuka
+      },
+      child: body,
+    );
+  }
+
   /// Konten pesan lokasi: peta statis (OSM) + tombol buka di aplikasi peta.
   Widget _locationContent(BuildContext context, Color textColor) {
     final parts = (message.content ?? '').split(',');
@@ -743,6 +788,7 @@ class MessageBubble extends StatelessWidget {
       case 'LOCATION':
         return _locationContent(context, textColor);
       case 'IMAGE':
+        if (message.viewOnce) return _viewOnceContent(textColor);
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: GestureDetector(

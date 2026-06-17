@@ -175,12 +175,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  Future<void> _sendImage() async {
+  Future<void> _sendImage({bool viewOnce = false}) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
-    await _uploadAndSend(bytes, picked.name, 'IMAGE');
+    await _uploadAndSend(bytes, picked.name, 'IMAGE', viewOnce: viewOnce);
   }
 
   Future<void> _sendFile() async {
@@ -194,13 +194,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _uploadAndSend(
     List<int> bytes,
     String name,
-    String type,
-  ) async {
+    String type, {
+    bool viewOnce = false,
+  }) async {
     setState(() => _uploading = true);
     try {
       final chat = context.read<ChatProvider>();
       final up = await chat.service.uploadFile(bytes, name);
-      chat.sendMedia(_convId, type: type, mediaUrl: up.url, mediaName: up.name);
+      chat.sendMedia(_convId,
+          type: type,
+          mediaUrl: up.url,
+          mediaName: up.name,
+          viewOnce: viewOnce);
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
@@ -330,6 +335,40 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _showDisappearingDialog(Conversation conv) async {
+    const opts = <(String, int)>[
+      ('Mati', 0),
+      ('24 jam', 86400),
+      ('7 hari', 604800),
+      ('90 hari', 7776000),
+    ];
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Pesan sementara'),
+        children: [
+          for (final o in opts)
+            ListTile(
+              title: Text(o.$1),
+              trailing: conv.disappearingSeconds == o.$2
+                  ? const Icon(Icons.check_rounded)
+                  : null,
+              onTap: () => Navigator.pop(context, o.$2),
+            ),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    await chat.setDisappearing(conv.id, picked);
+    messenger.showSnackBar(SnackBar(
+      content: Text(picked == 0
+          ? 'Pesan sementara dimatikan'
+          : 'Pesan baru akan hilang otomatis'),
+    ));
+  }
+
   Future<void> _sendLocation() async {
     final messenger = ScaffoldMessenger.of(context);
     final chat = context.read<ChatProvider>();
@@ -368,8 +407,9 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            runSpacing: 8,
             children: [
               _attachOption(
                 icon: Icons.image_rounded,
@@ -396,6 +436,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _sendLocation();
+                },
+              ),
+              _attachOption(
+                icon: Icons.timer_rounded,
+                label: 'Sekali lihat',
+                color: const Color(0xFFF59E0B),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendImage(viewOnce: true);
                 },
               ),
             ],
@@ -562,6 +611,28 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: const Icon(Icons.search_rounded),
                   onPressed: () => setState(() => _searching = true),
                 ),
+                PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'disappearing') _showDisappearingDialog(liveConv);
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'disappearing',
+                      child: Row(
+                        children: [
+                          Icon(
+                            liveConv.disappearingSeconds > 0
+                                ? Icons.timer_rounded
+                                : Icons.timer_outlined,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          const Text('Pesan sementara'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
       body: Column(
@@ -628,6 +699,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                       highlight:
                                           _searching ? _searchQuery : null,
                                       starred: chat.isStarred(m.id),
+                                      onViewOnce: (id) =>
+                                          context.read<ChatProvider>()
+                                              .markViewOnce(id),
                                       onQuoteTap: (id) =>
                                           _scrollToMessage(id, flash: true),
                                       onCallBack: isGroup

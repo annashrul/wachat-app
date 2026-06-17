@@ -69,6 +69,11 @@ class ChatService {
         data: {'muted': muted});
   }
 
+  Future<void> setDisappearing(String conversationId, int seconds) async {
+    await _api.dio.post('/conversations/$conversationId/disappearing',
+        data: {'seconds': seconds});
+  }
+
   Future<List<Message>> getStarred() async {
     final res = await _api.dio.get('/messages/starred');
     return (res.data as List)
