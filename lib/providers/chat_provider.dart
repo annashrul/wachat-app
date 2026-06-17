@@ -428,9 +428,16 @@ class ChatProvider extends ChangeNotifier {
     _socket.emit('message:react', {'messageId': messageId, 'emoji': emoji});
   }
 
-  /// Kirim editan teks pesan.
+  /// Kirim editan teks pesan + tampilkan langsung (optimistic).
   void editMessage(String messageId, String content) {
     _socket.emit('message:edit', {'messageId': messageId, 'content': content});
+    // Optimistic: langsung tampilkan editan tanpa menunggu echo server.
+    final i = messages.indexWhere((m) => m.id == messageId);
+    if (i >= 0) {
+      _onMessageEdited(messages[i].editedCopy(content));
+    } else {
+      notifyListeners();
+    }
   }
 
   void _onMessageEdited(Message msg) {

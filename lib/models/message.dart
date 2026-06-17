@@ -191,6 +191,32 @@ class Message {
     return null;
   }
 
+  /// Salinan dengan teks diedit (untuk update optimistic saat edit).
+  Message editedCopy(String newContent) => Message(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
+        createdAt: createdAt,
+        content: newContent,
+        mediaUrl: mediaUrl,
+        mediaName: mediaName,
+        senderName: senderName,
+        senderAvatar: senderAvatar,
+        pending: pending,
+        clientTempId: clientTempId,
+        forwarded: forwarded,
+        deleted: deleted,
+        replyToId: replyToId,
+        replyTo: replyTo,
+        statusRef: statusRef,
+        expiresAt: expiresAt,
+        editedAt: DateTime.now(),
+        viewOnce: viewOnce,
+        viewOnceSeen: viewOnceSeen,
+        reactions: reactions,
+      );
+
   /// Salinan dengan status dihapus (untuk update lokal saat message:deleted).
   Message asDeleted() => Message(
         id: id,

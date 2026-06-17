@@ -1313,11 +1313,13 @@ class _ChatScreenState extends State<ChatScreen> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Bilah reaksi cepat (ala WhatsApp).
@@ -1381,7 +1383,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 );
               }),
-            if (mine && !m.deleted && m.type == 'TEXT')
+            if (mine &&
+                !m.deleted &&
+                m.type == 'TEXT' &&
+                DateTime.now().difference(m.createdAt).inMinutes < 15)
               ListTile(
                 leading: const Icon(Icons.edit_rounded),
                 title: const Text('Edit'),
@@ -1432,6 +1437,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
           ],
+          ),
         ),
       ),
     );
