@@ -150,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildChatsTab(context),
         const StatusScreen(),
         const CallHistoryScreen(),
-        const ContactsScreen(),
+        ContactsScreen(onOpen: _openChat),
       ],
     );
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/conversation.dart';
 import '../models/user.dart';
 import '../providers/chat_provider.dart';
 import '../services/api_client.dart';
@@ -10,7 +11,9 @@ import 'chat_screen.dart';
 import 'qr_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
-  const ContactsScreen({super.key});
+  /// Bila diisi (mode dua panel/web), chat dibuka di panel kanan, bukan layar penuh.
+  final void Function(Conversation conversation)? onOpen;
+  const ContactsScreen({super.key, this.onOpen});
 
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
@@ -48,9 +51,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
       final c = await chat.service.createDirect(u.id);
       await chat.loadConversations();
       if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ChatScreen(conversation: c)),
-      );
+      if (widget.onOpen != null) {
+        widget.onOpen!(c); // dua panel (web) → buka di panel kanan
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ChatScreen(conversation: c)),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
