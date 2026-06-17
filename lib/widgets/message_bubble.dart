@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -723,53 +724,68 @@ class MessageBubble extends StatelessWidget {
     if (lat == null || lng == null) {
       return Text('📍 Lokasi', style: TextStyle(color: textColor));
     }
-    final staticMap =
-        'https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng'
-        '&zoom=15&size=260x150&markers=$lat,$lng,red-pushpin';
+    // Thumbnail dari ubin (tile) OpenStreetMap — andal & tanpa API key.
+    const zoom = 15;
+    final n = 1 << zoom; // 2^zoom
+    final latRad = lat * math.pi / 180.0;
+    final xTile = ((lng + 180.0) / 360.0 * n).floor();
+    final yTile =
+        ((1 - math.log(math.tan(latRad) + 1 / math.cos(latRad)) / math.pi) /
+                2 *
+                n)
+            .floor();
+    final tileUrl = 'https://tile.openstreetmap.org/$zoom/$xTile/$yTile.png';
     final mapsUrl =
         'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
     return GestureDetector(
       onTap: () => _open(mapsUrl),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CachedNetworkImage(
-              imageUrl: staticMap,
-              width: 260,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 240,
               height: 150,
-              fit: BoxFit.cover,
-              placeholder: (_, _) => Container(
-                width: 260,
-                height: 150,
-                color: Colors.black12,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (_, _, _) => Container(
-                width: 260,
-                height: 150,
-                color: Colors.black12,
-                alignment: Alignment.center,
-                child: const Icon(Icons.map_rounded, size: 40),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Icon(Icons.location_on_rounded,
-                      size: 16, color: textColor),
-                  const SizedBox(width: 4),
-                  Text('Lokasi — buka peta',
-                      style: TextStyle(color: textColor, fontSize: 13)),
+                  CachedNetworkImage(
+                    imageUrl: tileUrl,
+                    fit: BoxFit.cover,
+                    httpHeaders: const {'User-Agent': 'WAChat/1.0 (chat app)'},
+                    placeholder: (_, _) => Container(
+                      color: Colors.black12,
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, _, _) => Container(
+                      color: Colors.black12,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.map_rounded, size: 40),
+                    ),
+                  ),
+                  const Center(
+                    child: Icon(Icons.location_on_rounded,
+                        color: Color(0xFFEF4444), size: 36),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_on_rounded, size: 16, color: textColor),
+                const SizedBox(width: 4),
+                Text('Lokasi — buka peta',
+                    style: TextStyle(color: textColor, fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
