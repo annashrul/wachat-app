@@ -739,10 +739,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               style:
                                   TextStyle(fontSize: 12, color: palette.muted),
                             )
-                          else if (liveConv.peerIsContact &&
-                              chat.presenceText(liveConv) != null)
-                            // Status (online/terakhir dilihat) hanya untuk
-                            // kontak yang sudah disimpan.
+                          else if (chat.presenceText(liveConv) != null)
                             Text(
                               chat.presenceText(liveConv)!,
                               style: TextStyle(
