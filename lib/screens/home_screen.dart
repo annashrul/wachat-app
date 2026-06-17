@@ -246,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
         : chat.conversations
             .where((c) => c.title.toLowerCase().contains(_query.toLowerCase()))
             .toList();
-    final filtered = base.where((c) {
+    final visible = base.where((c) {
       if (chat.isArchived(c.id)) return false; // arsip disembunyikan dari daftar
       switch (_filter) {
         case 'unread':
@@ -259,6 +259,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return true;
       }
     }).toList();
+    // Chat tersemat (pin) tampil di atas, sisanya tetap urut waktu.
+    final filtered = [
+      ...visible.where((c) => chat.isPinned(c.id)),
+      ...visible.where((c) => !chat.isPinned(c.id)),
+    ];
 
     return PopScope(
       canPop: _selected.isEmpty,
@@ -530,6 +535,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: Icon(Icons.notifications_off_rounded,
                                       size: 15, color: palette.muted),
                                 ),
+                              if (chat.isPinned(c.id))
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(Icons.push_pin_rounded,
+                                      size: 14, color: palette.muted),
+                                ),
                             ],
                           ),
                         ),
@@ -641,6 +652,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final chat = context.read<ChatProvider>();
     final allFav = _selected.every(chat.isFavorite);
     final allMuted = _selected.every(chat.isMuted);
+    final allPinned = _selected.every(chat.isPinned);
     final single = _selected.length == 1;
     final one = single ? chat.conversationById(_selected.first) : null;
     final canBlock = one != null && !one.isGroup && one.peer != null;
@@ -660,6 +672,17 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: allFav ? 'Hapus dari favorit' : 'Tambah ke favorit',
           icon: Icon(allFav ? Icons.star_rounded : Icons.star_outline_rounded),
           onPressed: () => _favoriteSelected(!allFav),
+        ),
+        IconButton(
+          tooltip: allPinned ? 'Lepas pin' : 'Sematkan',
+          icon: Icon(
+              allPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined),
+          onPressed: () {
+            for (final id in _selected) {
+              chat.setPinned(id, !allPinned);
+            }
+            _clearSelection();
+          },
         ),
         IconButton(
           tooltip: allMuted ? 'Bunyikan' : 'Bisukan',

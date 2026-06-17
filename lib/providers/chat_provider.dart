@@ -127,6 +127,7 @@ class ChatProvider extends ChangeNotifier {
     _attachListeners();
     _loadFavorites();
     _loadArchived();
+    _loadPinned();
     loadStarred();
     _expiryTimer ??=
         Timer.periodic(const Duration(seconds: 20), (_) => purgeExpiredLocal());
@@ -198,6 +199,35 @@ class ChatProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_archiveKey, _archived.toList());
+    } catch (_) {}
+  }
+
+  // ===== Pin chat (lokal per perangkat) =====
+  static const _pinKey = 'pinned_convs';
+  final Set<String> _pinned = {};
+
+  bool isPinned(String id) => _pinned.contains(id);
+
+  Future<void> _loadPinned() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _pinned
+        ..clear()
+        ..addAll(prefs.getStringList(_pinKey) ?? []);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> setPinned(String id, bool value) async {
+    if (value) {
+      _pinned.add(id);
+    } else {
+      _pinned.remove(id);
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_pinKey, _pinned.toList());
     } catch (_) {}
   }
 
@@ -754,6 +784,20 @@ class ChatProvider extends ChangeNotifier {
         content: content,
         reply: replyingTo,
         viewOnce: viewOnce));
+  }
+
+  /// Sematkan / lepas pesan tersemat di percakapan.
+  Future<void> pinMessage(String conversationId, String? messageId) async {
+    final c = conversationById(conversationId);
+    final prev = c?.pinnedMessageId;
+    if (c != null) c.pinnedMessageId = messageId;
+    notifyListeners();
+    try {
+      await _chat.pinMessage(conversationId, messageId);
+    } catch (_) {
+      if (c != null) c.pinnedMessageId = prev;
+      notifyListeners();
+    }
   }
 
   /// Atur timer disappearing untuk percakapan.

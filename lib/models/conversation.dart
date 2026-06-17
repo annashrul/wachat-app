@@ -13,6 +13,7 @@ class Conversation {
   DateTime updatedAt;
   bool muted; // notifikasi dibisukan untuk user ini
   int disappearingSeconds; // 0 = nonaktif
+  String? pinnedMessageId; // pesan tersemat di percakapan
   final String? description; // deskripsi grup
   final Map<String, String> roles; // userId -> 'ADMIN' | 'MEMBER'
 
@@ -34,6 +35,7 @@ class Conversation {
     required this.updatedAt,
     this.muted = false,
     this.disappearingSeconds = 0,
+    this.pinnedMessageId,
     this.description,
     Map<String, String>? roles,
     Map<String, DateTime>? readAt,
@@ -101,6 +103,7 @@ class Conversation {
       unreadCount: json['unreadCount'] as int? ?? 0,
       muted: json['muted'] == true,
       disappearingSeconds: json['disappearingSeconds'] as int? ?? 0,
+      pinnedMessageId: json['pinnedMessageId'] as String?,
       description: json['description'] as String?,
       roles: {
         for (final s in (json['memberStates'] as List? ?? []))

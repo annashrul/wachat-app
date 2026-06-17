@@ -119,6 +119,13 @@ class ChatService {
         data: {'muted': muted});
   }
 
+  Future<Conversation> pinMessage(
+      String conversationId, String? messageId) async {
+    final res = await _api.dio.post('/conversations/$conversationId/pin',
+        data: {'messageId': messageId});
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<void> setDisappearing(String conversationId, int seconds) async {
     await _api.dio.post('/conversations/$conversationId/disappearing',
         data: {'seconds': seconds});

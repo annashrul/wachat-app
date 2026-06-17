@@ -658,6 +658,8 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (!chat.connected) _connectionBanner(),
+          if (liveConv.pinnedMessageId != null)
+            _pinnedBanner(liveConv.pinnedMessageId!, palette),
           Expanded(
             child: chat.loadingMessages
                 ? const Center(child: CircularProgressIndicator())
@@ -896,6 +898,60 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.replyingTo != null) _replyBar(chat.replyingTo!, palette),
           _buildInputBar(palette),
         ],
+      ),
+    );
+  }
+
+  Widget _pinnedBanner(String messageId, AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
+    final chat = context.read<ChatProvider>();
+    Message? m;
+    for (final x in chat.messages) {
+      if (x.id == messageId) {
+        m = x;
+        break;
+      }
+    }
+    final preview = m == null
+        ? 'Pesan disematkan'
+        : m.deleted
+            ? 'Pesan dihapus'
+            : (m.type == 'TEXT' ? (m.content ?? '') : '📎 Media');
+    return Material(
+      color: scheme.primary.withValues(alpha: 0.06),
+      child: InkWell(
+        onTap: () => _scrollToMessage(messageId, flash: true),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+          child: Row(
+            children: [
+              Icon(Icons.push_pin_rounded, size: 16, color: scheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Pesan tersemat',
+                        style: TextStyle(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12)),
+                    Text(preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: palette.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Lepas sematan',
+                icon: const Icon(Icons.close_rounded, size: 18),
+                onPressed: () => chat.pinMessage(_convId, null),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1160,6 +1216,26 @@ class _ChatScreenState extends State<ChatScreen> {
                   _startEditing(m);
                 },
               ),
+            if (!m.deleted)
+              Builder(builder: (_) {
+                final pinned = context
+                        .read<ChatProvider>()
+                        .conversationById(_convId)
+                        ?.pinnedMessageId ==
+                    m.id;
+                return ListTile(
+                  leading: Icon(pinned
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined),
+                  title: Text(pinned ? 'Lepas sematan' : 'Sematkan'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context
+                        .read<ChatProvider>()
+                        .pinMessage(_convId, pinned ? null : m.id);
+                  },
+                );
+              }),
             if (!m.deleted && m.type == 'TEXT' && m.content != null)
               ListTile(
                 leading: const Icon(Icons.copy_rounded),
