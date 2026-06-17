@@ -214,6 +214,10 @@ class NotificationService {
   /// Percakapan yang sedang dibuka — notif untuk chat ini di-skip (foreground).
   String? activeConversationId;
 
+  /// Percakapan yang dibisukan — notif foreground untuk chat ini di-skip.
+  /// (Push saat app tertutup sudah disaring di server.)
+  Set<String> mutedConversations = {};
+
   /// conversationId yang menunggu dibuka (mis. app baru dibuka dari notif).
   String? _pendingConversationId;
 
@@ -239,6 +243,7 @@ class NotificationService {
           if (m.data['type'] == 'call') return;
           final convId = m.data['conversationId'] as String?;
           if (convId != null && convId == activeConversationId) return;
+          if (convId != null && mutedConversations.contains(convId)) return;
           await showWhatsAppNotification(m.data);
         });
 

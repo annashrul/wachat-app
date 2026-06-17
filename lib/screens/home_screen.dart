@@ -15,6 +15,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
 import 'chat_screen.dart';
+import 'archived_screen.dart';
 import 'status_screen.dart';
 import 'status_view_screen.dart';
 import 'call_history_screen.dart';
@@ -233,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .where((c) => c.title.toLowerCase().contains(_query.toLowerCase()))
             .toList();
     final filtered = base.where((c) {
+      if (chat.isArchived(c.id)) return false; // arsip disembunyikan dari daftar
       switch (_filter) {
         case 'unread':
           return c.unreadCount > 0;
@@ -387,6 +389,15 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           if (!_searching) _filterChips(palette),
+          if (!_searching && _filter == 'all' && chat.archivedCount > 0)
+            ListTile(
+              leading: Icon(Icons.archive_rounded, color: palette.muted),
+              title: const Text('Diarsipkan',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              trailing: Text('${chat.archivedCount}',
+                  style: TextStyle(color: palette.muted)),
+              onTap: _openArchived,
+            ),
           Expanded(
             child: RefreshIndicator(
         onRefresh: () => chat.loadConversations(),
@@ -486,6 +497,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
+                              if (c.muted)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(Icons.notifications_off_rounded,
+                                      size: 15, color: palette.muted),
+                                ),
                             ],
                           ),
                         ),
@@ -596,6 +613,7 @@ class _HomeScreenState extends State<HomeScreen> {
   PreferredSizeWidget _selectionBar(ColorScheme scheme) {
     final chat = context.read<ChatProvider>();
     final allFav = _selected.every(chat.isFavorite);
+    final allMuted = _selected.every(chat.isMuted);
     final single = _selected.length == 1;
     final one = single ? chat.conversationById(_selected.first) : null;
     final canBlock = one != null && !one.isGroup && one.peer != null;
@@ -615,6 +633,18 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: allFav ? 'Hapus dari favorit' : 'Tambah ke favorit',
           icon: Icon(allFav ? Icons.star_rounded : Icons.star_outline_rounded),
           onPressed: () => _favoriteSelected(!allFav),
+        ),
+        IconButton(
+          tooltip: allMuted ? 'Bunyikan' : 'Bisukan',
+          icon: Icon(allMuted
+              ? Icons.notifications_off_rounded
+              : Icons.notifications_active_outlined),
+          onPressed: () => _muteSelected(!allMuted),
+        ),
+        IconButton(
+          tooltip: 'Arsipkan',
+          icon: const Icon(Icons.archive_outlined),
+          onPressed: _archiveSelected,
         ),
         IconButton(
           tooltip: 'Hapus',
@@ -639,6 +669,35 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
       ],
     );
+  }
+
+  Future<void> _muteSelected(bool value) async {
+    final chat = context.read<ChatProvider>();
+    for (final id in _selected) {
+      chat.setMuted(id, value);
+    }
+    _clearSelection();
+  }
+
+  Future<void> _archiveSelected() async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final ids = _selected.toList();
+    for (final id in ids) {
+      chat.setArchived(id, true);
+    }
+    _clearSelection();
+    messenger.showSnackBar(SnackBar(
+      content: Text('${ids.length} chat diarsipkan'),
+      action: SnackBarAction(
+        label: 'Urungkan',
+        onPressed: () {
+          for (final id in ids) {
+            chat.setArchived(id, false);
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _markReadSelected() async {
@@ -773,6 +832,12 @@ class _HomeScreenState extends State<HomeScreen> {
         .then((_) {
       if (mounted) context.read<StatusProvider>().loadFeed();
     });
+  }
+
+  void _openArchived() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ArchivedScreen()),
+    );
   }
 
   void _openChat(Conversation c) {

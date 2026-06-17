@@ -125,6 +125,7 @@ class ChatProvider extends ChangeNotifier {
     // listener harus mengikuti socket akun terbaru, bukan socket lama.
     _attachListeners();
     _loadFavorites();
+    _loadArchived();
   }
 
   // ===== Favorit (disimpan lokal per perangkat) =====
@@ -163,6 +164,65 @@ class ChatProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_favKey, _favorites.toList());
     } catch (_) {}
+  }
+
+  // ===== Arsip (disimpan lokal per perangkat, seperti favorit) =====
+  static const _archiveKey = 'archived_convs';
+  final Set<String> _archived = {};
+
+  bool isArchived(String id) => _archived.contains(id);
+  int get archivedCount =>
+      conversations.where((c) => _archived.contains(c.id)).length;
+
+  Future<void> _loadArchived() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _archived
+        ..clear()
+        ..addAll(prefs.getStringList(_archiveKey) ?? []);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> setArchived(String id, bool value) async {
+    if (value) {
+      _archived.add(id);
+    } else {
+      _archived.remove(id);
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_archiveKey, _archived.toList());
+    } catch (_) {}
+  }
+
+  // ===== Bisukan notifikasi (server-side) =====
+  /// Set bisukan untuk dipakai handler notifikasi foreground (FCM).
+  bool isMuted(String id) => conversationById(id)?.muted ?? false;
+
+  Future<void> setMuted(String id, bool value) async {
+    final c = conversationById(id);
+    if (c != null) c.muted = value;
+    notifyListeners();
+    _syncMutedToNotif();
+    try {
+      await _chat.setMuted(id, value);
+    } catch (_) {
+      // gagal: kembalikan state
+      if (c != null) c.muted = !value;
+      notifyListeners();
+      _syncMutedToNotif();
+    }
+  }
+
+  /// Sinkronkan daftar conv yang dibisukan ke NotificationService agar
+  /// notifikasi foreground (FCM) untuk chat tsb tidak ditampilkan.
+  void _syncMutedToNotif() {
+    NotificationService.instance.mutedConversations = conversations
+        .where((c) => c.muted)
+        .map((c) => c.id)
+        .toSet();
   }
 
   /// Tandai sebuah percakapan sudah dibaca (reset badge + kabari server).
@@ -405,8 +465,8 @@ class ChatProvider extends ChangeNotifier {
     } else if (!isMine) {
       loadConversations();
     }
-    // Notifikasi browser (web) untuk pesan masuk dari orang lain.
-    if (!isMine) {
+    // Notifikasi browser (web) untuk pesan masuk dari orang lain (kecuali bisu).
+    if (!isMine && !(conversationById(msg.conversationId)?.muted ?? false)) {
       final c = conversationById(msg.conversationId);
       final body = c != null && c.isGroup
           ? '${msg.senderName ?? ''}: ${_previewText(msg)}'
@@ -446,6 +506,7 @@ class ChatProvider extends ChangeNotifier {
           _lastSeen.putIfAbsent(p!.id, () => p.lastSeen!);
         }
       }
+      _syncMutedToNotif();
     } finally {
       loadingConversations = false;
       _syncWebBadge();

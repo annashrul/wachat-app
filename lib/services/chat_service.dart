@@ -64,6 +64,11 @@ class ChatService {
     await _api.dio.delete('/conversations/$conversationId');
   }
 
+  Future<void> setMuted(String conversationId, bool muted) async {
+    await _api.dio.post('/conversations/$conversationId/mute',
+        data: {'muted': muted});
+  }
+
   Future<List<AppUser>> searchUsers(String query) async {
     final res = await _api.dio.get('/users/search',
         queryParameters: {'q': query});

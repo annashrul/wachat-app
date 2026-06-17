@@ -11,6 +11,7 @@ class Conversation {
   Message? lastMessage;
   int unreadCount;
   DateTime updatedAt;
+  bool muted; // notifikasi dibisukan untuk user ini
 
   // userId -> kapan terakhir membaca / menerima (untuk centang).
   final Map<String, DateTime> readAt;
@@ -26,6 +27,7 @@ class Conversation {
     this.lastMessage,
     this.unreadCount = 0,
     required this.updatedAt,
+    this.muted = false,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
   })  : readAt = readAt ?? {},
@@ -88,6 +90,7 @@ class Conversation {
           ? Message.fromJson(json['lastMessage'] as Map<String, dynamic>)
           : null,
       unreadCount: json['unreadCount'] as int? ?? 0,
+      muted: json['muted'] == true,
       updatedAt:
           DateTime.tryParse(json['updatedAt'] as String? ?? '')?.toLocal() ??
           DateTime.now(),
