@@ -739,7 +739,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               style:
                                   TextStyle(fontSize: 12, color: palette.muted),
                             )
-                          else if (chat.presenceText(liveConv) != null)
+                          else if (liveConv.peerIsContact &&
+                              chat.presenceText(liveConv) != null)
+                            // Status (online/terakhir dilihat) hanya untuk
+                            // kontak yang sudah disimpan.
                             Text(
                               chat.presenceText(liveConv)!,
                               style: TextStyle(
@@ -1095,7 +1098,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Belum ada di kontak Anda • ${peer.phone}',
+                  'Belum di kontak Anda • nama profil: ${peer.displayName}',
                   style: const TextStyle(
                       color: Color(0xFF8A6D00), fontSize: 12.5),
                 ),
