@@ -142,71 +142,70 @@ class _HomeScreenState extends State<HomeScreen> {
     WebNotify.setUnread(unread); // badge favicon + judul tab (web)
     // Layar lebar (web/desktop) → dua panel ala WhatsApp Web.
     final wide = MediaQuery.of(context).size.width >= 900;
-    final shell = Scaffold(
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          _buildChatsTab(context),
-          const StatusScreen(),
-          const CallHistoryScreen(),
-          const ContactsScreen(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) {
-          setState(() => _tab = i);
-          if (i == 2) {
-            final c = context.read<CallProvider>();
-            c.loadCalls();
-            c.markCallsSeen();
-          }
-        },
-        destinations: [
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread > 0,
-              label: Text('$unread'),
-              child: const Icon(Icons.chat_bubble_outline_rounded),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: unread > 0,
-              label: Text('$unread'),
-              child: const Icon(Icons.chat_bubble_rounded),
-            ),
-            label: 'Chat',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.donut_large_outlined),
-            selectedIcon: Icon(Icons.donut_large_rounded),
-            label: 'Status',
-          ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: call.missedCount > 0,
-              label: Text('${call.missedCount}'),
-              child: const Icon(Icons.call_outlined),
-            ),
-            selectedIcon: const Icon(Icons.call_rounded),
-            label: 'Panggilan',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.people_outline_rounded),
-            selectedIcon: Icon(Icons.people_rounded),
-            label: 'Kontak',
-          ),
-        ],
-      ),
+    final palette = AppPalette.of(context);
+
+    final tabContent = IndexedStack(
+      index: _tab,
+      children: [
+        _buildChatsTab(context),
+        const StatusScreen(),
+        const CallHistoryScreen(),
+        const ContactsScreen(),
+      ],
     );
 
-    if (!wide) return shell;
+    // Layar sempit (HP) → bottom navigation seperti biasa.
+    if (!wide) {
+      return Scaffold(
+        body: tabContent,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: _selectTab,
+          destinations: [
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+              selectedIcon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.chat_bubble_rounded),
+              ),
+              label: 'Chat',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.donut_large_outlined),
+              selectedIcon: Icon(Icons.donut_large_rounded),
+              label: 'Status',
+            ),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: call.missedCount > 0,
+                label: Text('${call.missedCount}'),
+                child: const Icon(Icons.call_outlined),
+              ),
+              selectedIcon: const Icon(Icons.call_rounded),
+              label: 'Panggilan',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.people_outline_rounded),
+              selectedIcon: Icon(Icons.people_rounded),
+              label: 'Kontak',
+            ),
+          ],
+        ),
+      );
+    }
 
-    // Dua panel: daftar (kiri, lebar tetap) + room chat (kanan).
-    final palette = AppPalette.of(context);
+    // Layar lebar (web/desktop) → rail kiri (ala WhatsApp Web) + daftar + room.
     return Scaffold(
       body: Row(
         children: [
-          SizedBox(width: 400, child: shell),
+          _navRail(context, unread, call.missedCount),
+          VerticalDivider(width: 1, color: palette.cardBorder),
+          SizedBox(width: 400, child: tabContent),
           VerticalDivider(width: 1, color: palette.cardBorder),
           Expanded(
             child: _selectedConv == null
@@ -216,6 +215,85 @@ class _HomeScreenState extends State<HomeScreen> {
                     conversation: _selectedConv!,
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _selectTab(int i) {
+    setState(() => _tab = i);
+    if (i == 2) {
+      final c = context.read<CallProvider>();
+      c.loadCalls();
+      c.markCallsSeen();
+    }
+  }
+
+  /// Rail navigasi vertikal kiri (web/desktop). Ikon menu di atas, avatar bawah.
+  Widget _navRail(BuildContext context, int unread, int missed) {
+    final scheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
+    final auth = context.watch<AuthProvider>();
+
+    Widget item(int i, IconData icon, IconData selected, String tip,
+        {int badge = 0}) {
+      final active = _tab == i;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: IconButton(
+          tooltip: tip,
+          onPressed: () => _selectTab(i),
+          icon: Badge(
+            isLabelVisible: badge > 0,
+            label: Text('$badge'),
+            child: Icon(active ? selected : icon),
+          ),
+          style: IconButton.styleFrom(
+            backgroundColor:
+                active ? scheme.primary.withValues(alpha: 0.14) : null,
+            foregroundColor: active ? scheme.primary : palette.muted,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 66,
+      color: palette.cardBorder.withValues(alpha: 0.12),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          item(0, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded,
+              'Chat', badge: unread),
+          item(1, Icons.donut_large_outlined, Icons.donut_large_rounded,
+              'Status'),
+          item(2, Icons.call_outlined, Icons.call_rounded, 'Panggilan',
+              badge: missed),
+          item(3, Icons.people_outline_rounded, Icons.people_rounded,
+              'Kontak'),
+          const Spacer(),
+          IconButton(
+            tooltip: 'Setelan',
+            icon: const Icon(Icons.settings_outlined),
+            color: palette.muted,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+            ),
+            child: Avatar(
+              url: auth.user?.avatarUrl,
+              name: auth.user?.displayName ?? '?',
+              radius: 18,
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
