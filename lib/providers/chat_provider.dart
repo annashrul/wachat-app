@@ -529,6 +529,8 @@ class ChatProvider extends ChangeNotifier {
         return '🙂 Stiker';
       case 'CALL':
         return '📞 Panggilan suara';
+      case 'LOCATION':
+        return '📍 Lokasi';
       default:
         return m.content ?? '';
     }
@@ -692,6 +694,12 @@ class ChatProvider extends ChangeNotifier {
       {StatusRef? statusRef}) {
     _addOptimistic(_optimistic(conversationId, 'STICKER',
         content: sticker, reply: replyingTo, statusRef: statusRef));
+  }
+
+  /// Kirim lokasi sebagai pesan (content = "lat,lng").
+  void sendLocation(String conversationId, double lat, double lng) {
+    _addOptimistic(_optimistic(conversationId, 'LOCATION',
+        content: '$lat,$lng', reply: replyingTo));
   }
 
   void sendMedia(

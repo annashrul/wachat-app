@@ -670,6 +670,65 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Konten pesan lokasi: peta statis (OSM) + tombol buka di aplikasi peta.
+  Widget _locationContent(BuildContext context, Color textColor) {
+    final parts = (message.content ?? '').split(',');
+    final lat = parts.isNotEmpty ? double.tryParse(parts[0].trim()) : null;
+    final lng = parts.length > 1 ? double.tryParse(parts[1].trim()) : null;
+    if (lat == null || lng == null) {
+      return Text('📍 Lokasi', style: TextStyle(color: textColor));
+    }
+    final staticMap =
+        'https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng'
+        '&zoom=15&size=260x150&markers=$lat,$lng,red-pushpin';
+    final mapsUrl =
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+    return GestureDetector(
+      onTap: () => _open(mapsUrl),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CachedNetworkImage(
+              imageUrl: staticMap,
+              width: 260,
+              height: 150,
+              fit: BoxFit.cover,
+              placeholder: (_, _) => Container(
+                width: 260,
+                height: 150,
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+              errorWidget: (_, _, _) => Container(
+                width: 260,
+                height: 150,
+                color: Colors.black12,
+                alignment: Alignment.center,
+                child: const Icon(Icons.map_rounded, size: 40),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.location_on_rounded,
+                      size: 16, color: textColor),
+                  const SizedBox(width: 4),
+                  Text('Lokasi — buka peta',
+                      style: TextStyle(color: textColor, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Color? _parseColor(String? hex) {
     if (hex == null) return null;
     var h = hex.replaceAll('#', '').trim();
@@ -681,6 +740,8 @@ class MessageBubble extends StatelessWidget {
   Widget _buildContent(BuildContext context, AppPalette palette) {
     final textColor = isMine ? palette.outgoingText : palette.incomingText;
     switch (message.type) {
+      case 'LOCATION':
+        return _locationContent(context, textColor);
       case 'IMAGE':
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),

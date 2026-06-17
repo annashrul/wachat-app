@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -329,6 +330,33 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _sendLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final chat = context.read<ChatProvider>();
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Aktifkan GPS/lokasi dulu')));
+        return;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Izin lokasi ditolak')));
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition();
+      chat.sendLocation(_convId, pos.latitude, pos.longitude);
+    } catch (_) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Gagal mengambil lokasi')));
+    }
+  }
+
   void _showAttachMenu() {
     final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
@@ -359,6 +387,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _sendFile();
+                },
+              ),
+              _attachOption(
+                icon: Icons.location_on_rounded,
+                label: 'Lokasi',
+                color: const Color(0xFF22C55E),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendLocation();
                 },
               ),
             ],
