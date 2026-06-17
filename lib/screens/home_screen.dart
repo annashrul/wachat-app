@@ -478,11 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-              child: Avatar(
-                url: auth.user?.avatarUrl,
-                name: auth.user?.displayName ?? '?',
-                radius: 19,
-              ),
+              icon: const Icon(Icons.more_vert_rounded),
             ),
           ),
         ],
