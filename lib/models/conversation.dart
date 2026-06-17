@@ -48,6 +48,10 @@ class Conversation {
 
   bool get isGroup => type == 'GROUP';
 
+  /// Nama untuk inisial avatar: tetap pakai nama profil/grup walau judul
+  /// (untuk kontak belum tersimpan) berupa nomor telepon.
+  String get avatarName => peer?.displayName ?? title;
+
   /// Sudah dibaca oleh SEMUA anggota lain (untuk centang biru).
   bool isReadByOthers(DateTime msgTime, String myId) {
     final others = members.where((u) => u.id != myId).toList();

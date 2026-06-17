@@ -706,7 +706,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     Avatar(
                       url: widget.conversation.avatarUrl,
-                      name: widget.conversation.title,
+                      name: widget.conversation.avatarName,
                       radius: 19,
                     ),
                     const SizedBox(width: 12),

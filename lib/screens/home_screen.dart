@@ -939,8 +939,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!c.isGroup && peer != null && myId != null) {
       segs = status.seenSegments(peer.id, myId);
     }
-    final avatar =
-        Avatar(url: c.avatarUrl, name: c.title, radius: 27, ringSegments: segs);
+    final avatar = Avatar(
+        url: c.avatarUrl, name: c.avatarName, radius: 27, ringSegments: segs);
     if (segs != null && peer != null) {
       return GestureDetector(
           onTap: () => _openPeerStatus(peer.id), child: avatar);
