@@ -10,6 +10,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
+import '../models/user.dart';
 import 'forward_screen.dart';
 import 'profile_view_screen.dart';
 import 'group_info_screen.dart';
@@ -35,6 +36,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
   Message? _editing; // pesan yang sedang diedit
+  List<AppUser> _mentionSuggestions = []; // autocomplete @mention (grup)
+  int _mentionAt = -1; // posisi '@' yang sedang aktif
   final _scroll = ScrollController();
   late final ChatProvider _chatProv;
   bool _typingSent = false;
@@ -163,6 +166,65 @@ class _ChatScreenState extends State<ChatScreen> {
       _typingSent = typing;
       chat.setTyping(_convId, typing);
     }
+    _updateMentions(v, chat);
+  }
+
+  void _updateMentions(String v, ChatProvider chat) {
+    final conv = chat.conversationById(_convId);
+    List<AppUser> sugg = [];
+    int at = -1;
+    if (conv != null && conv.isGroup) {
+      final sel = _input.selection.baseOffset;
+      final cursor = (sel < 0 || sel > v.length) ? v.length : sel;
+      final upto = v.substring(0, cursor);
+      final i = upto.lastIndexOf('@');
+      // '@' di awal atau didahului spasi, dan query tanpa spasi.
+      if (i >= 0 && (i == 0 || upto[i - 1] == ' ')) {
+        final query = upto.substring(i + 1);
+        if (!query.contains(' ') && !query.contains('\n')) {
+          final myId = context.read<AuthProvider>().userId;
+          final q = query.toLowerCase();
+          sugg = conv.members
+              .where((u) =>
+                  u.id != myId &&
+                  u.displayName.toLowerCase().contains(q))
+              .take(6)
+              .toList();
+          at = i;
+        }
+      }
+    }
+    final changed = sugg.length != _mentionSuggestions.length ||
+        at != _mentionAt ||
+        (sugg.isNotEmpty &&
+            _mentionSuggestions.isNotEmpty &&
+            sugg.first.id != _mentionSuggestions.first.id);
+    if (changed) {
+      setState(() {
+        _mentionSuggestions = sugg;
+        _mentionAt = at;
+      });
+    }
+  }
+
+  void _insertMention(AppUser u) {
+    final v = _input.text;
+    final sel = _input.selection.baseOffset;
+    final cursor = (sel < 0 || sel > v.length) ? v.length : sel;
+    if (_mentionAt < 0) return;
+    final before = v.substring(0, _mentionAt);
+    final after = v.substring(cursor);
+    final inserted = '@${u.displayName} ';
+    final newText = '$before$inserted$after';
+    _input.value = TextEditingValue(
+      text: newText,
+      selection:
+          TextSelection.collapsed(offset: (before + inserted).length),
+    );
+    setState(() {
+      _mentionSuggestions = [];
+      _mentionAt = -1;
+    });
   }
 
   void _sendText() {
@@ -180,6 +242,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatProv.setDraft(_convId, '');
     _typingSent = false;
     chat.setTyping(_convId, false);
+    if (_mentionSuggestions.isNotEmpty) {
+      setState(() {
+        _mentionSuggestions = [];
+        _mentionAt = -1;
+      });
+    }
     _scrollToBottom();
   }
 
@@ -721,6 +789,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                       highlight:
                                           _searching ? _searchQuery : null,
                                       starred: chat.isStarred(m.id),
+                                      mentionNames: isGroup
+                                          ? liveConv.members
+                                              .map((u) => u.displayName)
+                                              .toList()
+                                          : const [],
                                       onViewOnce: (id) =>
                                           context.read<ChatProvider>()
                                               .markViewOnce(id),
@@ -894,9 +967,33 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
+          if (_mentionSuggestions.isNotEmpty) _mentionList(palette),
           if (_editing != null) _editingBar(palette),
           if (chat.replyingTo != null) _replyBar(chat.replyingTo!, palette),
           _buildInputBar(palette),
+        ],
+      ),
+    );
+  }
+
+  Widget _mentionList(AppPalette palette) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(top: BorderSide(color: palette.cardBorder)),
+      ),
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final u in _mentionSuggestions)
+            ListTile(
+              dense: true,
+              leading:
+                  Avatar(url: u.avatarUrl, name: u.displayName, radius: 18),
+              title: Text(u.displayName),
+              onTap: () => _insertMention(u),
+            ),
         ],
       ),
     );

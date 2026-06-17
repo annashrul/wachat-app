@@ -19,6 +19,7 @@ class MessageBubble extends StatelessWidget {
   final MessageStatus? status; // centang (untuk pesan sendiri)
   final String? highlight; // sorot teks saat pencarian
   final bool starred; // pesan diberi bintang
+  final List<String> mentionNames; // nama anggota grup untuk sorot @mention
   // Ketuk kutipan reply → lompat ke pesan asli.
   final void Function(String messageId)? onQuoteTap;
   // Ketuk event panggilan → telepon balik.
@@ -34,6 +35,7 @@ class MessageBubble extends StatelessWidget {
     this.status,
     this.highlight,
     this.starred = false,
+    this.mentionNames = const [],
     this.onQuoteTap,
     this.onCallBack,
     this.onViewOnce,
@@ -77,7 +79,59 @@ class MessageBubble extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final base = TextStyle(fontSize: 15, height: 1.3, color: textColor);
     final text = message.content ?? '';
-    // Pisahkan URL dulu (URL tidak diformat), sisanya diberi format markdown.
+    // Lapisan terluar: sorot @mention (jika ada nama anggota), lalu URL+format.
+    final spans = <InlineSpan>[];
+    final mentions = _mentionRanges(text);
+    var pos = 0;
+    for (final r in mentions) {
+      if (r.$1 > pos) {
+        spans.addAll(_urlFmtSpans(text.substring(pos, r.$1), base, scheme));
+      }
+      spans.add(TextSpan(
+        text: text.substring(r.$1, r.$2),
+        style: base.copyWith(
+            color: scheme.primary, fontWeight: FontWeight.w600),
+      ));
+      pos = r.$2;
+    }
+    if (pos < text.length) {
+      spans.addAll(_urlFmtSpans(text.substring(pos), base, scheme));
+    }
+    return Text.rich(TextSpan(style: base, children: spans));
+  }
+
+  /// Rentang [start,end) untuk tiap "@Nama" yang cocok anggota grup.
+  List<(int, int)> _mentionRanges(String text) {
+    if (mentionNames.isEmpty) return const [];
+    final ranges = <(int, int)>[];
+    // Cocokkan nama terpanjang dulu agar "@Budi Santoso" tidak terpotong.
+    final names = [...mentionNames]..sort((a, b) => b.length.compareTo(a.length));
+    var i = 0;
+    while (i < text.length) {
+      if (text[i] == '@') {
+        String? matched;
+        for (final n in names) {
+          if (n.isEmpty) continue;
+          final token = '@$n';
+          if (i + token.length <= text.length &&
+              text.substring(i, i + token.length) == token) {
+            matched = token;
+            break;
+          }
+        }
+        if (matched != null) {
+          ranges.add((i, i + matched.length));
+          i += matched.length;
+          continue;
+        }
+      }
+      i++;
+    }
+    return ranges;
+  }
+
+  /// URL + format markdown untuk satu segmen teks (tanpa mention).
+  List<InlineSpan> _urlFmtSpans(String text, TextStyle base, ColorScheme scheme) {
     final spans = <InlineSpan>[];
     var last = 0;
     for (final m in _urlReg.allMatches(text)) {
@@ -101,7 +155,7 @@ class MessageBubble extends StatelessWidget {
     if (last < text.length) {
       spans.addAll(_formatSpans(text.substring(last), base));
     }
-    return Text.rich(TextSpan(style: base, children: spans));
+    return spans;
   }
 
   /// Parser format ala WhatsApp: *tebal* _miring_ ~coret~ `monospace`.
