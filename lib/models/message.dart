@@ -68,6 +68,26 @@ class ReplyPreview {
   }
 }
 
+/// Satu reaksi emoji pada pesan.
+class MessageReaction {
+  final String userId;
+  final String emoji;
+  const MessageReaction({required this.userId, required this.emoji});
+
+  factory MessageReaction.fromJson(Map<String, dynamic> j) => MessageReaction(
+        userId: j['userId'] as String? ?? '',
+        emoji: j['emoji'] as String? ?? '',
+      );
+
+  static List<MessageReaction> listFrom(dynamic raw) {
+    if (raw is! List) return [];
+    return raw
+        .whereType<Map>()
+        .map((e) => MessageReaction.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+}
+
 class Message {
   final String id;
   final String conversationId;
@@ -86,6 +106,8 @@ class Message {
   final String? replyToId;
   final ReplyPreview? replyTo;
   final StatusRef? statusRef;
+  // Reaksi emoji (mutable agar bisa diperbarui in-place saat event socket).
+  List<MessageReaction> reactions;
 
   Message({
     required this.id,
@@ -105,6 +127,7 @@ class Message {
     this.replyToId,
     this.replyTo,
     this.statusRef,
+    this.reactions = const [],
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -130,7 +153,25 @@ class Message {
           ? ReplyPreview.fromJson(json['replyTo'] as Map<String, dynamic>)
           : null,
       statusRef: StatusRef.tryParse(json['statusRef'] as String?),
+      reactions: MessageReaction.listFrom(json['reactions']),
     );
+  }
+
+  /// Reaksi dikelompokkan per emoji -> jumlah (untuk ditampilkan di bubble).
+  Map<String, int> get reactionCounts {
+    final m = <String, int>{};
+    for (final r in reactions) {
+      m[r.emoji] = (m[r.emoji] ?? 0) + 1;
+    }
+    return m;
+  }
+
+  /// Emoji reaksi milik [userId] (null jika belum bereaksi).
+  String? myReaction(String? userId) {
+    for (final r in reactions) {
+      if (r.userId == userId) return r.emoji;
+    }
+    return null;
   }
 
   /// Salinan dengan status dihapus (untuk update lokal saat message:deleted).

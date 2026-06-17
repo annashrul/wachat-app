@@ -876,9 +876,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  static const List<String> _quickReactions = [
+    '👍', '❤️', '😂', '😮', '😢', '🙏',
+  ];
+
   void _showMessageMenu(Message m, bool mine) {
     if (m.type == 'CALL') return; // event panggilan: tak ada aksi
     final scheme = Theme.of(context).colorScheme;
+    final myId = context.read<AuthProvider>().userId;
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -889,6 +894,35 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Bilah reaksi cepat (ala WhatsApp).
+            if (!m.deleted)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    for (final e in _quickReactions)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () {
+                          Navigator.pop(context);
+                          context.read<ChatProvider>().react(m.id, e);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: m.myReaction(myId) == e
+                                ? scheme.primary.withValues(alpha: 0.18)
+                                : Colors.transparent,
+                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 26)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (!m.deleted) const Divider(height: 1),
             if (!m.deleted)
               ListTile(
                 leading: const Icon(Icons.reply_rounded),

@@ -187,6 +187,7 @@ class ChatProvider extends ChangeNotifier {
       'message:read',
       'message:delivered',
       'message:deleted',
+      'message:reaction',
       'presence',
     ]) {
       _socket.off(e);
@@ -238,6 +239,14 @@ class ChatProvider extends ChangeNotifier {
         map['messageId'] as String,
       );
     });
+    _socket.on('message:reaction', (data) {
+      final map = Map<String, dynamic>.from(data as Map);
+      _onReaction(
+        map['conversationId'] as String?,
+        map['messageId'] as String,
+        MessageReaction.listFrom(map['reactions']),
+      );
+    });
     _socket.on('presence', (data) {
       final map = Map<String, dynamic>.from(data as Map);
       final uid = map['userId'] as String;
@@ -249,6 +258,28 @@ class ChatProvider extends ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+
+  /// Terapkan daftar reaksi terbaru ke pesan terkait (in-place).
+  void _onReaction(
+      String? convId, String messageId, List<MessageReaction> reactions) {
+    for (final m in messages) {
+      if (m.id == messageId) m.reactions = reactions;
+    }
+    if (convId != null) {
+      final cached = _messageCache[convId];
+      if (cached != null) {
+        for (final m in cached) {
+          if (m.id == messageId) m.reactions = reactions;
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Toggle reaksi emoji pada sebuah pesan (kirim ke server).
+  void react(String messageId, String emoji) {
+    _socket.emit('message:react', {'messageId': messageId, 'emoji': emoji});
   }
 
   void _onMessageDeleted(String convId, String messageId) {

@@ -172,7 +172,12 @@ class MessageBubble extends StatelessWidget {
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+      child: Column(
+        crossAxisAlignment:
+            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         constraints: BoxConstraints(
@@ -244,6 +249,43 @@ class MessageBubble extends StatelessWidget {
                 ],
               ],
             ),
+          ],
+        ),
+          ),
+          if (message.reactions.isNotEmpty) _reactionsBar(context),
+        ],
+      ),
+    );
+  }
+
+  /// Pil reaksi (emoji + jumlah) yang menempel di bawah gelembung.
+  Widget _reactionsBar(BuildContext context) {
+    final counts = message.reactionCounts;
+    if (counts.isEmpty) return const SizedBox.shrink();
+    final palette = AppPalette.of(context);
+    final emojis = counts.keys.take(3).join();
+    final total = message.reactions.length;
+    return Transform.translate(
+      offset: const Offset(0, -8),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: palette.incomingBubble,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: palette.cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emojis, style: const TextStyle(fontSize: 13)),
+            if (total > 1) ...[
+              const SizedBox(width: 3),
+              Text(
+                '$total',
+                style: TextStyle(fontSize: 12, color: palette.muted),
+              ),
+            ],
           ],
         ),
       ),
