@@ -699,6 +699,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _buildSearchAppBar(palette)
           : AppBar(
               titleSpacing: 0,
+              toolbarHeight: 64,
               title: InkWell(
                 onTap: _openInfo,
                 child: Row(
