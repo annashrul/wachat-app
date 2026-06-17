@@ -604,18 +604,40 @@ class _ChatScreenState extends State<ChatScreen> {
                                     child: item,
                                   );
                                 }
-                                if (mine && !m.deleted) {
+                                if (!m.deleted && m.type != 'CALL') {
+                                  // Geser kanan = balas (semua pesan);
+                                  // geser kiri = hapus (hanya pesan sendiri).
                                   item = Dismissible(
                                     key: ValueKey(m.id),
-                                    direction: DismissDirection.endToStart,
+                                    direction: mine
+                                        ? DismissDirection.horizontal
+                                        : DismissDirection.startToEnd,
+                                    dismissThresholds: const {
+                                      DismissDirection.startToEnd: 0.25,
+                                      DismissDirection.endToStart: 0.3,
+                                    },
                                     background: Container(
+                                      alignment: Alignment.centerLeft,
+                                      padding: const EdgeInsets.only(left: 28),
+                                      child: Icon(Icons.reply_rounded,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary),
+                                    ),
+                                    secondaryBackground: Container(
                                       alignment: Alignment.centerRight,
                                       padding: const EdgeInsets.only(right: 28),
                                       child: const Icon(Icons.delete_rounded,
                                           color: Color(0xFFEF4444)),
                                     ),
-                                    confirmDismiss: (_) async {
-                                      await _confirmDeleteMessage(m);
+                                    confirmDismiss: (dir) async {
+                                      if (dir == DismissDirection.startToEnd) {
+                                        context
+                                            .read<ChatProvider>()
+                                            .setReplyingTo(m);
+                                      } else if (mine) {
+                                        await _confirmDeleteMessage(m);
+                                      }
                                       return false;
                                     },
                                     child: item,

@@ -69,18 +69,20 @@ class MessageBubble extends StatelessWidget {
 
   Widget _linkifiedText(BuildContext context, Color textColor) {
     final scheme = Theme.of(context).colorScheme;
+    final base = TextStyle(fontSize: 15, height: 1.3, color: textColor);
     final text = message.content ?? '';
+    // Pisahkan URL dulu (URL tidak diformat), sisanya diberi format markdown.
     final spans = <InlineSpan>[];
     var last = 0;
     for (final m in _urlReg.allMatches(text)) {
       if (m.start > last) {
-        spans.add(TextSpan(text: text.substring(last, m.start)));
+        spans.addAll(_formatSpans(text.substring(last, m.start), base));
       }
       final url = m.group(0)!;
       spans.add(
         TextSpan(
           text: url,
-          style: TextStyle(
+          style: base.copyWith(
             color: scheme.primary,
             decoration: TextDecoration.underline,
             decorationColor: scheme.primary,
@@ -90,13 +92,66 @@ class MessageBubble extends StatelessWidget {
       );
       last = m.end;
     }
-    if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
-    return Text.rich(
-      TextSpan(
-        style: TextStyle(fontSize: 15, height: 1.3, color: textColor),
-        children: spans,
-      ),
-    );
+    if (last < text.length) {
+      spans.addAll(_formatSpans(text.substring(last), base));
+    }
+    return Text.rich(TextSpan(style: base, children: spans));
+  }
+
+  /// Parser format ala WhatsApp: *tebal* _miring_ ~coret~ `monospace`.
+  /// Mendukung nested (kecuali monospace yang literal).
+  static List<InlineSpan> _formatSpans(String text, TextStyle base) {
+    final spans = <InlineSpan>[];
+    final buf = StringBuffer();
+    void flush() {
+      if (buf.isNotEmpty) {
+        spans.add(TextSpan(text: buf.toString(), style: base));
+        buf.clear();
+      }
+    }
+
+    var i = 0;
+    while (i < text.length) {
+      final c = text[i];
+      // Monospace inline: `kode` (isi literal, tak diformat lagi).
+      if (c == '`') {
+        final end = text.indexOf('`', i + 1);
+        if (end > i + 1) {
+          flush();
+          spans.add(TextSpan(
+            text: text.substring(i + 1, end),
+            style: base.copyWith(
+              fontFamily: 'monospace',
+              fontFeatures: const [],
+            ),
+          ));
+          i = end + 1;
+          continue;
+        }
+      }
+      if (c == '*' || c == '_' || c == '~') {
+        final end = text.indexOf(c, i + 1);
+        // Butuh isi tak kosong & tak diawali/diakhiri spasi (ala WhatsApp).
+        if (end > i + 1 &&
+            text[i + 1] != ' ' &&
+            text[end - 1] != ' ') {
+          final inner = text.substring(i + 1, end);
+          final style = c == '*'
+              ? base.copyWith(fontWeight: FontWeight.bold)
+              : c == '_'
+                  ? base.copyWith(fontStyle: FontStyle.italic)
+                  : base.copyWith(decoration: TextDecoration.lineThrough);
+          flush();
+          spans.addAll(_formatSpans(inner, style)); // nested
+          i = end + 1;
+          continue;
+        }
+      }
+      buf.write(c);
+      i++;
+    }
+    flush();
+    return spans;
   }
 
   @override
