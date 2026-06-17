@@ -19,7 +19,11 @@ class StatusStory {
   final AppUser user;
   final List<StatusItem> statuses;
   final bool isMine;
-  StatusStory({required this.user, required this.statuses, this.isMine = false});
+  StatusStory({
+    required this.user,
+    required this.statuses,
+    this.isMine = false,
+  });
 }
 
 class StatusViewScreen extends StatefulWidget {
@@ -117,7 +121,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       _replyCtrl.clear();
       messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(ApiClient.errorMessage(e))),
+      );
     } finally {
       if (mounted) {
         setState(() => _sendingReply = false);
@@ -147,7 +153,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       chat.sendSticker(conv.id, sticker, statusRef: _currentRef());
       messenger.showSnackBar(const SnackBar(content: Text('Balasan terkirim')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(ApiClient.errorMessage(e))),
+      );
     } finally {
       if (mounted) _closeReply();
     }
@@ -352,13 +360,15 @@ class _StatusViewScreenState extends State<StatusViewScreen>
           final viewers = snap.data ?? [];
           if (snap.connectionState == ConnectionState.waiting) {
             return const SizedBox(
-                height: 160,
-                child: Center(child: CircularProgressIndicator()));
+              height: 160,
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           if (viewers.isEmpty) {
             return const SizedBox(
-                height: 160,
-                child: Center(child: Text('Belum ada yang melihat')));
+              height: 160,
+              child: Center(child: Text('Belum ada yang melihat')),
+            );
           }
           return ListView(
             shrinkWrap: true,
@@ -369,16 +379,23 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                   children: [
                     const Icon(Icons.visibility_rounded, size: 18),
                     const SizedBox(width: 8),
-                    Text('Dilihat oleh ${viewers.length}',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      'Dilihat oleh ${viewers.length}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ],
                 ),
               ),
-              ...viewers.map((u) => ListTile(
-                    leading: Avatar(
-                        url: u.avatarUrl, name: u.displayName, radius: 20),
-                    title: Text(u.displayName),
-                  )),
+              ...viewers.map(
+                (u) => ListTile(
+                  leading: Avatar(
+                    url: u.avatarUrl,
+                    name: u.displayName,
+                    radius: 20,
+                  ),
+                  title: Text(u.displayName),
+                ),
+              ),
             ],
           );
         },
@@ -442,12 +459,15 @@ class _StatusViewScreenState extends State<StatusViewScreen>
       case 'TEXT':
         return Padding(
           padding: const EdgeInsets.all(32),
-          child: Text(s.text ?? '',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w600)),
+          child: Text(
+            s.text ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         );
       case 'AUDIO':
         return Column(
@@ -457,9 +477,11 @@ class _StatusViewScreenState extends State<StatusViewScreen>
             if (s.caption?.isNotEmpty ?? false)
               Padding(
                 padding: const EdgeInsets.fromLTRB(32, 18, 32, 0),
-                child: Text(s.caption!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 18)),
+                child: Text(
+                  s.caption!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
               ),
           ],
         );
@@ -467,7 +489,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         final c = _video;
         if (c != null && c.value.isInitialized) {
           return AspectRatio(
-              aspectRatio: c.value.aspectRatio, child: VideoPlayer(c));
+            aspectRatio: c.value.aspectRatio,
+            child: VideoPlayer(c),
+          );
         }
         return const CircularProgressIndicator(color: Colors.white);
       default: // IMAGE
@@ -495,148 +519,165 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         if (!didPop) _closeReply();
       },
       child: Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: colored ? _parseColor(s.bgColor) : Colors.black,
-      body: GestureDetector(
-        onTapUp: (d) {
-          if (_replyOpen) return;
-          final w = MediaQuery.of(context).size.width;
-          if (d.globalPosition.dx < w * 0.33) {
-            _prev();
-          } else {
-            _next();
-          }
-        },
-        // Swipe ke atas untuk membalas (ala WhatsApp).
-        onVerticalDragEnd: (d) {
-          if (_story.isMine || _replyOpen) return;
-          if ((d.primaryVelocity ?? 0) < -250) _openReply();
-        },
-        child: Stack(
-          children: [
-            // Latar penuh layar: versi blur dari media supaya tidak ada area
-            // hitam (letterbox) di sisi/atas-bawah. Dengan begitu latar di
-            // belakang konten & komposer balasan jadi SATU warna.
-            _backdrop(s),
-            Positioned.fill(child: Center(child: _content(s))),
-            // Tombol navigasi prev/next.
-            if (!(_s == 0 && _i == 0))
+        resizeToAvoidBottomInset: false,
+        backgroundColor: colored ? _parseColor(s.bgColor) : Colors.black,
+        body: GestureDetector(
+          onTapUp: (d) {
+            if (_replyOpen) return;
+            final w = MediaQuery.of(context).size.width;
+            if (d.globalPosition.dx < w * 0.33) {
+              _prev();
+            } else {
+              _next();
+            }
+          },
+          // Swipe ke atas untuk membalas (ala WhatsApp).
+          onVerticalDragEnd: (d) {
+            if (_story.isMine || _replyOpen) return;
+            if ((d.primaryVelocity ?? 0) < -250) _openReply();
+          },
+          child: Stack(
+            children: [
+              // Latar penuh layar: versi blur dari media supaya tidak ada area
+              // hitam (letterbox) di sisi/atas-bawah. Dengan begitu latar di
+              // belakang konten & komposer balasan jadi SATU warna.
+              _backdrop(s),
+              Positioned.fill(child: Center(child: _content(s))),
+              // Tombol navigasi prev/next.
+              if (!(_s == 0 && _i == 0))
+                Positioned(
+                  left: 4,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _navButton(Icons.chevron_left_rounded, _prev),
+                  ),
+                ),
               Positioned(
-                left: 4,
+                right: 4,
                 top: 0,
                 bottom: 0,
-                child: Center(child: _navButton(Icons.chevron_left_rounded, _prev)),
+                child: Center(
+                  child: _navButton(Icons.chevron_right_rounded, _next),
+                ),
               ),
-            Positioned(
-              right: 4,
-              top: 0,
-              bottom: 0,
-              child:
-                  Center(child: _navButton(Icons.chevron_right_rounded, _next)),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: Row(
-                      children: [
-                        for (var k = 0; k < _story.statuses.length; k++)
-                          Expanded(
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 2),
-                              child: LinearProgressIndicator(
-                                value: k < _i
-                                    ? 1.0
-                                    : k == _i
-                                        ? _segmentProgress().toDouble()
-                                        : 0.0,
-                                minHeight: 2.5,
-                                backgroundColor: Colors.white38,
-                                valueColor:
-                                    const AlwaysStoppedAnimation(Colors.white),
+              SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          for (var k = 0; k < _story.statuses.length; k++)
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                child: LinearProgressIndicator(
+                                  value: k < _i
+                                      ? 1.0
+                                      : k == _i
+                                      ? _segmentProgress().toDouble()
+                                      : 0.0,
+                                  minHeight: 2.5,
+                                  backgroundColor: Colors.white38,
+                                  valueColor: const AlwaysStoppedAnimation(
+                                    Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  ListTile(
-                    leading: Avatar(
+                    ListTile(
+                      leading: Avatar(
                         url: _story.user.avatarUrl,
                         name: _story.user.displayName,
-                        radius: 18),
-                    title: Text(
-                      _story.isMine ? 'Status saya' : _story.user.displayName,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700),
+                        radius: 18,
+                      ),
+                      title: Text(
+                        _story.isMine ? 'Status saya' : _story.user.displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _ago(s.createdAt),
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
                     ),
-                    subtitle: Text(_ago(s.createdAt),
-                        style: const TextStyle(color: Colors.white70)),
-                    trailing: IconButton(
-                      icon:
-                          const Icon(Icons.close_rounded, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Saat membalas: area transparan untuk menutup balasan bila diketuk
-            // di luar komposer. Tanpa warna gelap, jadi tidak ada blok hitam
-            // di belakang form balasan.
-            if (_replyOpen)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _closeReply,
-                  behavior: HitTestBehavior.opaque,
-                  child: const SizedBox.expand(),
+                  ],
                 ),
               ),
-            // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom),
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!_replyOpen &&
-                            s.type != 'TEXT' &&
-                            s.type != 'AUDIO' &&
-                            (s.caption?.isNotEmpty ?? false))
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Text(s.caption!,
+              // Saat membalas: area transparan untuk menutup balasan bila diketuk
+              // di luar komposer. Tanpa warna gelap, jadi tidak ada blok hitam
+              // di belakang form balasan.
+              if (_replyOpen)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: _closeReply,
+                    behavior: HitTestBehavior.opaque,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              // Area bawah: caption + aksi pemilik / komposer balasan / shortcut.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOut,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_replyOpen &&
+                              s.type != 'TEXT' &&
+                              s.type != 'AUDIO' &&
+                              (s.caption?.isNotEmpty ?? false))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                s.caption!,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white)),
-                          ),
-                        if (_story.isMine)
-                          _ownerActions(liveCount)
-                        else if (_replyOpen)
-                          _replyComposer(scheme)
-                        else
-                          _swipeHint(),
-                      ],
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          if (_story.isMine)
+                            _ownerActions(liveCount)
+                          else if (_replyOpen)
+                            _replyComposer(scheme)
+                          else
+                            _swipeHint(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -654,11 +695,16 @@ class _StatusViewScreenState extends State<StatusViewScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.visibility_rounded,
-                    color: Colors.white70, size: 18),
+                const Icon(
+                  Icons.visibility_rounded,
+                  color: Colors.white70,
+                  size: 18,
+                ),
                 const SizedBox(width: 6),
-                Text('$liveCount dilihat',
-                    style: const TextStyle(color: Colors.white70)),
+                Text(
+                  '$liveCount dilihat',
+                  style: const TextStyle(color: Colors.white70),
+                ),
               ],
             ),
           ),
@@ -682,12 +728,19 @@ class _StatusViewScreenState extends State<StatusViewScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white, size: 28),
-            Text('Balas',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13)),
+            Icon(
+              Icons.keyboard_arrow_up_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+            Text(
+              'Balas',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
       ),
@@ -712,8 +765,10 @@ class _StatusViewScreenState extends State<StatusViewScreen>
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.emoji_emotions_outlined,
-                      color: Colors.white),
+                  icon: const Icon(
+                    Icons.emoji_emotions_outlined,
+                    color: Colors.white,
+                  ),
                   onPressed: _showReplyStickers,
                 ),
                 Expanded(
@@ -727,6 +782,10 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendReply(),
                     decoration: const InputDecoration(
+                      // Jangan ikut fill tema (yang terang) — biar transparan
+                      // dan latar status tembus, bukan kotak putih.
+                      filled: false,
+                      fillColor: Colors.transparent,
                       hintText: 'Balas…',
                       hintStyle: TextStyle(color: Colors.white70),
                       border: InputBorder.none,
@@ -755,7 +814,9 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                 ? const Padding(
                     padding: EdgeInsets.all(15),
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
           ),
