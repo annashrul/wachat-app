@@ -15,6 +15,7 @@ class Conversation {
   int disappearingSeconds; // 0 = nonaktif
   String? pinnedMessageId; // pesan tersemat di percakapan
   final String? description; // deskripsi grup
+  final bool peerIsContact; // lawan bicara (DIRECT) tersimpan di kontak?
   final Map<String, String> roles; // userId -> 'ADMIN' | 'MEMBER'
 
   bool isAdmin(String userId) => roles[userId] == 'ADMIN';
@@ -37,6 +38,7 @@ class Conversation {
     this.disappearingSeconds = 0,
     this.pinnedMessageId,
     this.description,
+    this.peerIsContact = false,
     Map<String, String>? roles,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
@@ -105,6 +107,7 @@ class Conversation {
       disappearingSeconds: json['disappearingSeconds'] as int? ?? 0,
       pinnedMessageId: json['pinnedMessageId'] as String?,
       description: json['description'] as String?,
+      peerIsContact: json['peerIsContact'] == true,
       roles: {
         for (final s in (json['memberStates'] as List? ?? []))
           (s as Map<String, dynamic>)['userId'] as String:

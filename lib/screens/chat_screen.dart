@@ -802,6 +802,10 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (!chat.connected) _connectionBanner(),
+          if (!isGroup &&
+              liveConv.peer != null &&
+              !liveConv.peerIsContact)
+            _unknownContactBanner(liveConv, palette),
           if (liveConv.pinnedMessageId != null)
             _pinnedBanner(liveConv.pinnedMessageId!, palette),
           Expanded(
@@ -1074,6 +1078,91 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _unknownContactBanner(Conversation conv, AppPalette palette) {
+    final peer = conv.peer!;
+    return Container(
+      color: const Color(0xFFFFF4D6),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 18, color: Color(0xFF8A6D00)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Belum ada di kontak Anda • ${peer.phone}',
+                  style: const TextStyle(
+                      color: Color(0xFF8A6D00), fontSize: 12.5),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: const Text('Tambah ke kontak'),
+                onPressed: () => _addContactFromChat(peer),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.block_rounded,
+                    size: 18, color: Color(0xFFEF4444)),
+                label: const Text('Blokir',
+                    style: TextStyle(color: Color(0xFFEF4444))),
+                onPressed: () => _blockFromChat(peer),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addContactFromChat(AppUser peer) async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await chat.service.addContact(peer.id);
+      await chat.loadConversations(); // segarkan → banner hilang
+      messenger.showSnackBar(SnackBar(
+          content: Text('${peer.displayName} ditambahkan ke kontak')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    }
+  }
+
+  Future<void> _blockFromChat(AppUser peer) async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Blokir ${peer.displayName}?'),
+        content: const Text('Anda tidak akan menerima pesan dari kontak ini.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Blokir')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await chat.service.blockUser(peer.id);
+      messenger.showSnackBar(const SnackBar(content: Text('Kontak diblokir')));
+      navigator.pop();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    }
   }
 
   Widget _pinnedBanner(String messageId, AppPalette palette) {
