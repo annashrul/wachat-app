@@ -76,10 +76,22 @@ class _HomeScreenState extends State<HomeScreen> {
     final token = uri.queryParameters['token'];
     if (token == null || token.isEmpty || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    final chat = context.read<ChatProvider>();
+    final isGroupInvite =
+        uri.host == 'group' || uri.pathSegments.contains('join');
     try {
-      final user = await context.read<ChatProvider>().service.scanContact(token);
-      messenger.showSnackBar(
-          SnackBar(content: Text('${user.displayName} ditambahkan ke kontak')));
+      if (isGroupInvite) {
+        final conv = await chat.service.joinGroup(token);
+        await chat.loadConversations();
+        if (!mounted) return;
+        messenger.showSnackBar(
+            SnackBar(content: Text('Bergabung ke "${conv.title}"')));
+        _openChat(conv);
+      } else {
+        final user = await chat.service.scanContact(token);
+        messenger.showSnackBar(SnackBar(
+            content: Text('${user.displayName} ditambahkan ke kontak')));
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
     }

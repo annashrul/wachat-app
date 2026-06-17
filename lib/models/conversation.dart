@@ -13,6 +13,10 @@ class Conversation {
   DateTime updatedAt;
   bool muted; // notifikasi dibisukan untuk user ini
   int disappearingSeconds; // 0 = nonaktif
+  final String? description; // deskripsi grup
+  final Map<String, String> roles; // userId -> 'ADMIN' | 'MEMBER'
+
+  bool isAdmin(String userId) => roles[userId] == 'ADMIN';
 
   // userId -> kapan terakhir membaca / menerima (untuk centang).
   final Map<String, DateTime> readAt;
@@ -30,9 +34,12 @@ class Conversation {
     required this.updatedAt,
     this.muted = false,
     this.disappearingSeconds = 0,
+    this.description,
+    Map<String, String>? roles,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
-  })  : readAt = readAt ?? {},
+  })  : roles = roles ?? {},
+        readAt = readAt ?? {},
         deliveredAt = deliveredAt ?? {};
 
   bool get isGroup => type == 'GROUP';
@@ -94,6 +101,12 @@ class Conversation {
       unreadCount: json['unreadCount'] as int? ?? 0,
       muted: json['muted'] == true,
       disappearingSeconds: json['disappearingSeconds'] as int? ?? 0,
+      description: json['description'] as String?,
+      roles: {
+        for (final s in (json['memberStates'] as List? ?? []))
+          (s as Map<String, dynamic>)['userId'] as String:
+              s['role'] as String? ?? 'MEMBER',
+      },
       updatedAt:
           DateTime.tryParse(json['updatedAt'] as String? ?? '')?.toLocal() ??
           DateTime.now(),

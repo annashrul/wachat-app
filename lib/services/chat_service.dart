@@ -64,6 +64,56 @@ class ChatService {
     await _api.dio.delete('/conversations/$conversationId');
   }
 
+  Future<Conversation> getConversation(String id) async {
+    final res = await _api.dio.get('/conversations/$id');
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> updateGroup(String id,
+      {String? name, String? description, String? avatarUrl}) async {
+    final res = await _api.dio.patch('/conversations/$id', data: {
+      'name': ?name,
+      'description': ?description,
+      'avatarUrl': ?avatarUrl,
+    });
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> addMembers(String id, List<String> userIds) async {
+    final res = await _api.dio
+        .post('/conversations/$id/members', data: {'userIds': userIds});
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> removeMember(String id, String userId) async {
+    final res = await _api.dio.delete('/conversations/$id/members/$userId');
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> setMemberRole(
+      String id, String userId, bool admin) async {
+    final res = await _api.dio
+        .post('/conversations/$id/members/$userId/role', data: {'admin': admin});
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<({String token, String link, String? webLink})> createInvite(
+      String id) async {
+    final res = await _api.dio.post('/conversations/$id/invite');
+    final d = res.data as Map<String, dynamic>;
+    return (
+      token: d['token'] as String,
+      link: d['link'] as String,
+      webLink: d['webLink'] as String?,
+    );
+  }
+
+  Future<Conversation> joinGroup(String token) async {
+    final res =
+        await _api.dio.post('/conversations/join', data: {'token': token});
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<void> setMuted(String conversationId, bool muted) async {
     await _api.dio.post('/conversations/$conversationId/mute',
         data: {'muted': muted});
