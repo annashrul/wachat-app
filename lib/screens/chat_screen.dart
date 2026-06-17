@@ -1383,10 +1383,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 );
               }),
-            if (mine &&
-                !m.deleted &&
-                m.type == 'TEXT' &&
-                DateTime.now().difference(m.createdAt).inMinutes < 15)
+            if (mine && !m.deleted && m.type == 'TEXT')
               ListTile(
                 leading: const Icon(Icons.edit_rounded),
                 title: const Text('Edit'),
