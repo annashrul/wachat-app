@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
@@ -457,6 +458,72 @@ class _ChatScreenState extends State<ChatScreen> {
     ));
   }
 
+  Future<void> _openContact(String userId, String name) async {
+    final chat = context.read<ChatProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final conv = await chat.service.createDirect(userId);
+      if (!mounted) return;
+      navigator.push(
+          MaterialPageRoute(builder: (_) => ChatScreen(conversation: conv)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    }
+  }
+
+  Future<void> _sendContact() async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    List<({String id, String? alias, AppUser user})> contacts = [];
+    try {
+      contacts = await chat.service.getContacts();
+    } catch (_) {}
+    if (!mounted) return;
+    if (contacts.isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Belum ada kontak')));
+      return;
+    }
+    final picked = await showModalBottomSheet<AppUser>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        builder: (_, controller) => ListView(
+          controller: controller,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Kirim kontak',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            for (final c in contacts)
+              ListTile(
+                leading: Avatar(
+                    url: c.user.avatarUrl,
+                    name: c.user.displayName,
+                    radius: 20),
+                title: Text(c.alias ?? c.user.displayName),
+                subtitle: Text(c.user.phone),
+                onTap: () => Navigator.pop(context, c.user),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    final json = jsonEncode({
+      'name': picked.displayName,
+      'phone': picked.phone,
+      'userId': picked.id,
+    });
+    chat.sendContact(_convId, json);
+    _scrollToBottom();
+  }
+
   Future<void> _sendLocation() async {
     final messenger = ScaffoldMessenger.of(context);
     final chat = context.read<ChatProvider>();
@@ -533,6 +600,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _sendImage(viewOnce: true);
+                },
+              ),
+              _attachOption(
+                icon: Icons.person_rounded,
+                label: 'Kontak',
+                color: const Color(0xFF0EA5E9),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendContact();
                 },
               ),
             ],
@@ -797,6 +873,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       onViewOnce: (id) =>
                                           context.read<ChatProvider>()
                                               .markViewOnce(id),
+                                      onOpenContact: _openContact,
                                       onQuoteTap: (id) =>
                                           _scrollToMessage(id, flash: true),
                                       onCallBack: isGroup

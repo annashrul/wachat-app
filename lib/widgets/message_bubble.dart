@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -26,6 +27,8 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onCallBack;
   // Ketuk media sekali-lihat → tandai sudah dibuka.
   final void Function(String messageId)? onViewOnce;
+  // Ketuk kartu kontak → buka/mulai chat dengan kontak itu.
+  final void Function(String userId, String name)? onOpenContact;
 
   const MessageBubble({
     super.key,
@@ -39,6 +42,7 @@ class MessageBubble extends StatelessWidget {
     this.onQuoteTap,
     this.onCallBack,
     this.onViewOnce,
+    this.onOpenContact,
   });
 
   Widget _highlightedText(Color textColor, String query) {
@@ -778,6 +782,71 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Kartu kontak (content = JSON {name, phone, userId}).
+  Widget _contactContent(BuildContext context, Color textColor) {
+    Map<String, dynamic> data = {};
+    try {
+      data = jsonDecode(message.content ?? '{}') as Map<String, dynamic>;
+    } catch (_) {}
+    final name = (data['name'] as String?) ?? 'Kontak';
+    final phone = (data['phone'] as String?) ?? '';
+    final userId = data['userId'] as String?;
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 230,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: scheme.primary.withValues(alpha: 0.15),
+                child: Icon(Icons.person_rounded, color: scheme.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: textColor, fontWeight: FontWeight.w700)),
+                    if (phone.isNotEmpty)
+                      Text(phone,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: textColor.withValues(alpha: 0.75),
+                              fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (userId != null && onOpenContact != null) ...[
+            const Divider(height: 14),
+            InkWell(
+              onTap: () => onOpenContact!(userId, name),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Center(
+                  child: Text('Kirim pesan',
+                      style: TextStyle(
+                          color: scheme.primary, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   /// Konten pesan lokasi: peta statis (OSM) + tombol buka di aplikasi peta.
   Widget _locationContent(BuildContext context, Color textColor) {
     final parts = (message.content ?? '').split(',');
@@ -865,6 +934,8 @@ class MessageBubble extends StatelessWidget {
     switch (message.type) {
       case 'LOCATION':
         return _locationContent(context, textColor);
+      case 'CONTACT':
+        return _contactContent(context, textColor);
       case 'IMAGE':
         if (message.viewOnce) return _viewOnceContent(textColor);
         return ClipRRect(

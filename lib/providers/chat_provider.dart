@@ -596,6 +596,8 @@ class ChatProvider extends ChangeNotifier {
         return '📞 Panggilan suara';
       case 'LOCATION':
         return '📍 Lokasi';
+      case 'CONTACT':
+        return '👤 Kontak';
       default:
         return m.content ?? '';
     }
@@ -768,6 +770,12 @@ class ChatProvider extends ChangeNotifier {
   void sendLocation(String conversationId, double lat, double lng) {
     _addOptimistic(_optimistic(conversationId, 'LOCATION',
         content: '$lat,$lng', reply: replyingTo));
+  }
+
+  /// Kirim kartu kontak (content = JSON {name, phone, userId?}).
+  void sendContact(String conversationId, String contactJson) {
+    _addOptimistic(_optimistic(conversationId, 'CONTACT',
+        content: contactJson, reply: replyingTo));
   }
 
   void sendMedia(
