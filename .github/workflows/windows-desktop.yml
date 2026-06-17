@@ -1,0 +1,47 @@
+name: Build Windows Desktop
+
+# Build aplikasi desktop Windows (.exe) di runner Windows GitHub —
+# tidak perlu admin / toolchain lokal. Hasilnya diunggah sebagai artifact .zip.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'windows/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch: # bisa dijalankan manual dari tab Actions
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows (release)
+        run: flutter build windows --release
+
+      - name: Package into zip
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath wachat-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wachat-windows-desktop
+          path: wachat-windows.zip
+          if-no-files-found: error
