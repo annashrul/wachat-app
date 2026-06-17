@@ -34,6 +34,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
+  Message? _editing; // pesan yang sedang diedit
   final _scroll = ScrollController();
   late final ChatProvider _chatProv;
   bool _typingSent = false;
@@ -167,12 +168,31 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendText() {
     final text = _input.text.trim();
     if (text.isEmpty) return;
-    context.read<ChatProvider>().sendText(_convId, text);
+    final chat = context.read<ChatProvider>();
+    if (_editing != null) {
+      chat.editMessage(_editing!.id, text);
+      setState(() => _editing = null);
+      _input.clear();
+      return;
+    }
+    chat.sendText(_convId, text);
     _input.clear();
     _chatProv.setDraft(_convId, '');
     _typingSent = false;
-    context.read<ChatProvider>().setTyping(_convId, false);
+    chat.setTyping(_convId, false);
     _scrollToBottom();
+  }
+
+  void _startEditing(Message m) {
+    setState(() => _editing = m);
+    _input.text = m.content ?? '';
+    _input.selection =
+        TextSelection.collapsed(offset: _input.text.length);
+  }
+
+  void _cancelEditing() {
+    setState(() => _editing = null);
+    _input.clear();
   }
 
   Future<void> _sendImage({bool viewOnce = false}) async {
@@ -872,8 +892,42 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
+          if (_editing != null) _editingBar(palette),
           if (chat.replyingTo != null) _replyBar(chat.replyingTo!, palette),
           _buildInputBar(palette),
+        ],
+      ),
+    );
+  }
+
+  Widget _editingBar(AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.primary.withValues(alpha: 0.08),
+      padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+      child: Row(
+        children: [
+          Icon(Icons.edit_rounded, size: 18, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Edit pesan',
+                    style: TextStyle(
+                        color: scheme.primary, fontWeight: FontWeight.w700,
+                        fontSize: 12.5)),
+                Text(_editing?.content ?? '',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.muted, fontSize: 12.5)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: _cancelEditing,
+          ),
         ],
       ),
     );
@@ -1097,6 +1151,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 );
               }),
+            if (mine && !m.deleted && m.type == 'TEXT')
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Edit'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _startEditing(m);
+                },
+              ),
             if (!m.deleted && m.type == 'TEXT' && m.content != null)
               ListTile(
                 leading: const Icon(Icons.copy_rounded),

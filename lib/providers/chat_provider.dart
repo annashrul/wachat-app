@@ -289,6 +289,7 @@ class ChatProvider extends ChangeNotifier {
       'message:read',
       'message:delivered',
       'message:deleted',
+      'message:edited',
       'message:reaction',
       'message:viewonce',
       'presence',
@@ -357,6 +358,11 @@ class ChatProvider extends ChangeNotifier {
         map['messageId'] as String,
       );
     });
+    _socket.on('message:edited', (data) {
+      _onMessageEdited(
+        Message.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    });
     _socket.on('presence', (data) {
       final map = Map<String, dynamic>.from(data as Map);
       final uid = map['userId'] as String;
@@ -390,6 +396,24 @@ class ChatProvider extends ChangeNotifier {
   /// Toggle reaksi emoji pada sebuah pesan (kirim ke server).
   void react(String messageId, String emoji) {
     _socket.emit('message:react', {'messageId': messageId, 'emoji': emoji});
+  }
+
+  /// Kirim editan teks pesan.
+  void editMessage(String messageId, String content) {
+    _socket.emit('message:edit', {'messageId': messageId, 'content': content});
+  }
+
+  void _onMessageEdited(Message msg) {
+    final i = messages.indexWhere((m) => m.id == msg.id);
+    if (i >= 0) messages[i] = msg;
+    final cached = _messageCache[msg.conversationId];
+    if (cached != null) {
+      final ci = cached.indexWhere((m) => m.id == msg.id);
+      if (ci >= 0) cached[ci] = msg;
+    }
+    final c = conversationById(msg.conversationId);
+    if (c?.lastMessage?.id == msg.id) c!.lastMessage = msg;
+    notifyListeners();
   }
 
   void _onMessageDeleted(String convId, String messageId) {

@@ -304,6 +304,14 @@ class MessageBubble extends StatelessWidget {
                   Icon(Icons.star_rounded, size: 13, color: metaColor),
                   const SizedBox(width: 4),
                 ],
+                if (message.editedAt != null) ...[
+                  Text('diedit',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontStyle: FontStyle.italic,
+                          color: metaColor)),
+                  const SizedBox(width: 4),
+                ],
                 Text(
                   time,
                   style: TextStyle(fontSize: 10.5, color: metaColor),

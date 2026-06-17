@@ -107,6 +107,7 @@ class Message {
   final ReplyPreview? replyTo;
   final StatusRef? statusRef;
   final DateTime? expiresAt; // disappearing
+  final DateTime? editedAt; // null = belum pernah diedit
   final bool viewOnce;
   bool viewOnceSeen; // mutable: jadi true saat dibuka
   // Reaksi emoji (mutable agar bisa diperbarui in-place saat event socket).
@@ -134,6 +135,7 @@ class Message {
     this.replyTo,
     this.statusRef,
     this.expiresAt,
+    this.editedAt,
     this.viewOnce = false,
     this.viewOnceSeen = false,
     this.reactions = const [],
@@ -164,6 +166,8 @@ class Message {
       statusRef: StatusRef.tryParse(json['statusRef'] as String?),
       expiresAt:
           DateTime.tryParse(json['expiresAt'] as String? ?? '')?.toLocal(),
+      editedAt:
+          DateTime.tryParse(json['editedAt'] as String? ?? '')?.toLocal(),
       viewOnce: json['viewOnce'] == true,
       viewOnceSeen: json['viewOnceSeen'] == true,
       reactions: MessageReaction.listFrom(json['reactions']),
