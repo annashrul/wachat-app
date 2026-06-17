@@ -17,6 +17,7 @@ class MessageBubble extends StatelessWidget {
   final bool showSender; // tampilkan nama pengirim (grup)
   final MessageStatus? status; // centang (untuk pesan sendiri)
   final String? highlight; // sorot teks saat pencarian
+  final bool starred; // pesan diberi bintang
   // Ketuk kutipan reply → lompat ke pesan asli.
   final void Function(String messageId)? onQuoteTap;
   // Ketuk event panggilan → telepon balik.
@@ -29,6 +30,7 @@ class MessageBubble extends StatelessWidget {
     this.showSender = false,
     this.status,
     this.highlight,
+    this.starred = false,
     this.onQuoteTap,
     this.onCallBack,
   });
@@ -294,6 +296,10 @@ class MessageBubble extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (starred) ...[
+                  Icon(Icons.star_rounded, size: 13, color: metaColor),
+                  const SizedBox(width: 4),
+                ],
                 Text(
                   time,
                   style: TextStyle(fontSize: 10.5, color: metaColor),

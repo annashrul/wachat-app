@@ -590,6 +590,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           : null,
                                       highlight:
                                           _searching ? _searchQuery : null,
+                                      starred: chat.isStarred(m.id),
                                       onQuoteTap: (id) =>
                                           _scrollToMessage(id, flash: true),
                                       onCallBack: isGroup
@@ -971,6 +972,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   _forward(m);
                 },
               ),
+            if (!m.deleted)
+              Builder(builder: (_) {
+                final starred = context.read<ChatProvider>().isStarred(m.id);
+                return ListTile(
+                  leading: Icon(starred
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded),
+                  title: Text(starred ? 'Hapus bintang' : 'Bintangi'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.read<ChatProvider>().toggleStar(m.id, !starred);
+                  },
+                );
+              }),
             if (!m.deleted && m.type == 'TEXT' && m.content != null)
               ListTile(
                 leading: const Icon(Icons.copy_rounded),

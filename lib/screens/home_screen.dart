@@ -16,6 +16,7 @@ import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
 import 'chat_screen.dart';
 import 'archived_screen.dart';
+import 'starred_screen.dart';
 import 'status_screen.dart';
 import 'status_view_screen.dart';
 import 'call_history_screen.dart';
@@ -306,6 +307,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       builder: (_) => const ProfileEditScreen(),
                     ),
                   );
+                } else if (v == 'starred') {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const StarredScreen()),
+                  );
                 } else if (v == 'settings') {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -340,6 +345,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icon(Icons.person_rounded, size: 20),
                       SizedBox(width: 10),
                       Text('Profil saya'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'starred',
+                  child: Row(
+                    children: [
+                      Icon(Icons.star_rounded, size: 20),
+                      SizedBox(width: 10),
+                      Text('Pesan berbintang'),
                     ],
                   ),
                 ),

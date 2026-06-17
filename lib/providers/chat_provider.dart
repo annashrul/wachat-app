@@ -126,6 +126,7 @@ class ChatProvider extends ChangeNotifier {
     _attachListeners();
     _loadFavorites();
     _loadArchived();
+    loadStarred();
   }
 
   // ===== Favorit (disimpan lokal per perangkat) =====
@@ -195,6 +196,44 @@ class ChatProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_archiveKey, _archived.toList());
     } catch (_) {}
+  }
+
+  // ===== Pesan berbintang (server-side) =====
+  final Set<String> _starredIds = {};
+  List<Message> starredMessages = [];
+
+  bool isStarred(String messageId) => _starredIds.contains(messageId);
+
+  Future<void> loadStarred() async {
+    try {
+      starredMessages = await _chat.getStarred();
+      _starredIds
+        ..clear()
+        ..addAll(starredMessages.map((m) => m.id));
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> toggleStar(String messageId, bool starred) async {
+    if (starred) {
+      _starredIds.add(messageId);
+    } else {
+      _starredIds.remove(messageId);
+      starredMessages.removeWhere((m) => m.id == messageId);
+    }
+    notifyListeners();
+    try {
+      await _chat.setStarred(messageId, starred);
+      if (starred) await loadStarred(); // segarkan daftar berbintang
+    } catch (_) {
+      // revert
+      if (starred) {
+        _starredIds.remove(messageId);
+      } else {
+        _starredIds.add(messageId);
+      }
+      notifyListeners();
+    }
   }
 
   // ===== Bisukan notifikasi (server-side) =====

@@ -69,6 +69,17 @@ class ChatService {
         data: {'muted': muted});
   }
 
+  Future<List<Message>> getStarred() async {
+    final res = await _api.dio.get('/messages/starred');
+    return (res.data as List)
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> setStarred(String messageId, bool starred) async {
+    await _api.dio.post('/messages/$messageId/star', data: {'starred': starred});
+  }
+
   Future<List<AppUser>> searchUsers(String query) async {
     final res = await _api.dio.get('/users/search',
         queryParameters: {'q': query});
