@@ -37,12 +37,15 @@ class CallProvider extends ChangeNotifier {
   String? conversationId;
   bool muted = false;
   bool speakerOn = false;
+  bool isVideo = false; // panggilan video?
+  bool cameraOff = false; // kamera lokal dimatikan sementara
   Duration callDuration = Duration.zero;
   String? endReason; // mis. "Tidak dijawab", "Tidak tersedia"
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   final RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer localRenderer = RTCVideoRenderer(); // self-view video
   bool _rendererReady = false;
   bool _remoteSet = false;
   final List<RTCIceCandidate> _pendingCandidates = [];
@@ -89,6 +92,7 @@ class CallProvider extends ChangeNotifier {
             name: m['name'] as String?,
             avatar: m['avatar'] as String?,
             conversationId: m['conversationId'] as String?,
+            video: m['video'] == true,
           );
       NotificationService.instance.consumePendingCall();
       _attached = true;
@@ -189,14 +193,22 @@ class CallProvider extends ChangeNotifier {
   Future<void> _ensureRenderer() async {
     if (!_rendererReady) {
       await remoteRenderer.initialize();
+      await localRenderer.initialize();
       _rendererReady = true;
     }
   }
 
   Future<void> _createPeer() async {
     await _ensureRenderer();
-    _localStream = await navigator.mediaDevices
-        .getUserMedia({'audio': true, 'video': false});
+    _localStream = await navigator.mediaDevices.getUserMedia({
+      'audio': true,
+      'video': isVideo
+          ? {'facingMode': 'user', 'width': 1280, 'height': 720}
+          : false,
+    });
+    if (isVideo) {
+      localRenderer.srcObject = _localStream; // self-view
+    }
     final pc = await createPeerConnection(_config);
     _pc = pc;
     for (final track in _localStream!.getTracks()) {
@@ -230,14 +242,15 @@ class CallProvider extends ChangeNotifier {
   }
 
   // ===== Pemanggil =====
-  Future<void> startCall(Conversation conv) async {
+  Future<void> startCall(Conversation conv, {bool video = false}) async {
     final peer = conv.peer;
     if (peer == null || state != CallState.idle) return;
-    await startCallUser(peer, conversationId: conv.id);
+    await startCallUser(peer, conversationId: conv.id, video: video);
   }
 
   /// Panggil seorang pengguna langsung (mis. dari riwayat panggilan).
-  Future<void> startCallUser(AppUser peer, {String? conversationId}) async {
+  Future<void> startCallUser(AppUser peer,
+      {String? conversationId, bool video = false}) async {
     if (state != CallState.idle) return;
     peerId = peer.id;
     peerName = peer.displayName;
@@ -245,19 +258,27 @@ class CallProvider extends ChangeNotifier {
     this.conversationId = conversationId;
     endReason = null;
     muted = false;
-    speakerOn = false;
+    speakerOn = video; // video → default loudspeaker
+    isVideo = video;
+    cameraOff = false;
     _isCaller = true;
     _wasActive = false;
     state = CallState.outgoing;
     notifyListeners();
     _openScreen();
     try {
-      // Siapkan mic + peer; offer dibuat nanti saat penerima menerima
+      // Siapkan mic/kamera + peer; offer dibuat nanti saat penerima menerima
       // (call:accepted) → tahan terhadap penerima yang sedang offline.
       await _createPeer();
+      if (isVideo && !kIsWeb) {
+        try {
+          await Helper.setSpeakerphoneOn(true);
+        } catch (_) {}
+      }
       _socket.emit('call:invite', {
         'conversationId': conversationId,
         'to': peer.id,
+        'video': video,
       });
       // Timeout bila tak diangkat.
       _ringTimeout = Timer(const Duration(seconds: 45), () {
@@ -279,7 +300,7 @@ class CallProvider extends ChangeNotifier {
     }
     try {
       final offer = await _pc!.createOffer(
-          {'offerToReceiveAudio': true, 'offerToReceiveVideo': false});
+          {'offerToReceiveAudio': true, 'offerToReceiveVideo': isVideo});
       await _pc!.setLocalDescription(offer);
       _socket.emit('call:offer', {
         'to': peerId,
@@ -300,7 +321,7 @@ class CallProvider extends ChangeNotifier {
       _remoteSet = true;
       await _drainCandidates();
       final answer = await _pc!.createAnswer(
-          {'offerToReceiveAudio': true, 'offerToReceiveVideo': false});
+          {'offerToReceiveAudio': true, 'offerToReceiveVideo': isVideo});
       await _pc!.setLocalDescription(answer);
       _socket.emit('call:answer', {
         'to': peerId,
@@ -319,6 +340,7 @@ class CallProvider extends ChangeNotifier {
       name: from['displayName'] as String?,
       avatar: from['avatarUrl'] as String?,
       conversationId: data['conversationId'] as String?,
+      video: data['video'] == true,
     );
   }
 
@@ -329,12 +351,14 @@ class CallProvider extends ChangeNotifier {
     String? name,
     String? avatar,
     String? conversationId,
+    bool video = false,
   }) {
     _showIncoming(
       callerId: callerId,
       name: name,
       avatar: avatar,
       conversationId: conversationId,
+      video: video,
     );
   }
 
@@ -343,6 +367,7 @@ class CallProvider extends ChangeNotifier {
     String? name,
     String? avatar,
     String? conversationId,
+    bool video = false,
   }) {
     if (callerId == null) return;
     if (state != CallState.idle) {
@@ -356,7 +381,9 @@ class CallProvider extends ChangeNotifier {
     this.conversationId = conversationId;
     endReason = null;
     muted = false;
-    speakerOn = false;
+    speakerOn = video;
+    isVideo = video;
+    cameraOff = false;
     _isCaller = false;
     _wasActive = false;
     state = CallState.incoming;
@@ -450,6 +477,24 @@ class CallProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Matikan/nyalakan kamera lokal (video track).
+  void toggleCamera() {
+    cameraOff = !cameraOff;
+    for (final t in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+      t.enabled = !cameraOff;
+    }
+    notifyListeners();
+  }
+
+  /// Ganti kamera depan/belakang.
+  Future<void> switchCamera() async {
+    final tracks = _localStream?.getVideoTracks() ?? <MediaStreamTrack>[];
+    if (tracks.isEmpty) return;
+    try {
+      await Helper.switchCamera(tracks.first);
+    } catch (_) {}
+  }
+
   /// Tutup panggilan dari sisi kita (kirim sinyal ke lawan).
   void hangUp({String? reason, String? status}) {
     if (peerId != null) _socket.emit('call:end', {'to': peerId});
@@ -522,6 +567,7 @@ class CallProvider extends ChangeNotifier {
     if (_rendererReady) {
       try {
         remoteRenderer.srcObject = null;
+        localRenderer.srcObject = null;
       } catch (_) {}
     }
     try {
@@ -546,6 +592,7 @@ class CallProvider extends ChangeNotifier {
   void dispose() {
     _cleanup();
     remoteRenderer.dispose();
+    localRenderer.dispose();
     super.dispose();
   }
 }

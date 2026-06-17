@@ -156,6 +156,7 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
     'name': callerName,
     'avatar': avatarUrl,
     'conversationId': data['conversationId'] ?? '',
+    'video': (data['video'] as String?) == 'true',
   });
 
   final android = AndroidNotificationDetails(

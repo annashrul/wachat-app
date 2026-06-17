@@ -508,6 +508,14 @@ class _ChatScreenState extends State<ChatScreen> {
               actions: [
                 if (!isGroup)
                   IconButton(
+                    icon: const Icon(Icons.videocam_rounded),
+                    tooltip: 'Panggilan video',
+                    onPressed: () => context
+                        .read<CallProvider>()
+                        .startCall(liveConv, video: true),
+                  ),
+                if (!isGroup)
+                  IconButton(
                     icon: const Icon(Icons.call_rounded),
                     tooltip: 'Panggilan suara',
                     onPressed: () =>

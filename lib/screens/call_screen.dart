@@ -4,7 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../providers/call_provider.dart';
 import '../widgets/avatar.dart';
 
-/// Layar panggilan suara (penuh). Mengikuti state dari [CallProvider] dan
+/// Layar panggilan (suara & video). Mengikuti state dari [CallProvider] dan
 /// menutup dirinya sendiri saat panggilan kembali idle.
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
@@ -20,7 +20,7 @@ class CallScreen extends StatelessWidget {
       case CallState.outgoing:
         return 'Memanggil…';
       case CallState.incoming:
-        return 'Panggilan suara masuk';
+        return c.isVideo ? 'Panggilan video masuk' : 'Panggilan suara masuk';
       case CallState.connecting:
         return 'Menyambungkan…';
       case CallState.active:
@@ -36,13 +36,17 @@ class CallScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final call = context.watch<CallProvider>();
 
-    // Tutup layar otomatis ketika panggilan selesai.
     if (call.state == CallState.idle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final nav = Navigator.of(context);
         if (nav.canPop()) nav.pop();
       });
     }
+
+    final isVideo = call.isVideo;
+    // Tampilkan video remote penuh layar bila ada; jika belum, tampilkan
+    // pratinjau kamera sendiri (saat memanggil/menyambungkan).
+    final showSelfFull = isVideo && !call.hasRemote && !call.cameraOff;
 
     return PopScope(
       canPop: call.state == CallState.idle,
@@ -51,65 +55,124 @@ class CallScreen extends StatelessWidget {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0E1621),
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Renderer untuk memutar audio lawan (penting di web). Ukuran
-              // kecil (bukan 0) + opacity 0 agar elemen media benar-benar
-              // ter-mount di browser sehingga audionya diputar.
-              if (call.hasRemote)
-                Opacity(
-                  opacity: 0.0,
-                  child: SizedBox(
-                    width: 1,
-                    height: 1,
-                    child: RTCVideoView(call.remoteRenderer),
-                  ),
-                ),
-              const Spacer(flex: 2),
-              Avatar(
-                url: call.peerAvatar,
-                name: call.peerName ?? 'Pengguna',
-                radius: 64,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                call.peerName ?? 'Pengguna',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
+        body: Stack(
+          children: [
+            // Video remote penuh layar.
+            if (isVideo && call.hasRemote)
+              Positioned.fill(
+                child: RTCVideoView(
+                  call.remoteRenderer,
+                  objectFit:
+                      RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                 ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.call_rounded,
-                      size: 15, color: Colors.white54),
-                  const SizedBox(width: 6),
-                  Text(
-                    _status(call),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 15,
-                      fontFeatures: [FontFeature.tabularFigures()],
+            // Pratinjau kamera sendiri penuh layar saat belum tersambung.
+            if (showSelfFull)
+              Positioned.fill(
+                child: RTCVideoView(
+                  call.localRenderer,
+                  mirror: true,
+                  objectFit:
+                      RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                ),
+              ),
+            // Audio: renderer kecil tak terlihat agar audio lawan diputar (web).
+            if (!isVideo && call.hasRemote)
+              Opacity(
+                opacity: 0.0,
+                child: SizedBox(
+                  width: 1,
+                  height: 1,
+                  child: RTCVideoView(call.remoteRenderer),
+                ),
+              ),
+            // Lapisan gelap agar teks terbaca di atas video.
+            if (isVideo)
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x99000000), Colors.transparent, Color(0xAA000000)],
+                      stops: [0.0, 0.4, 1.0],
                     ),
                   ),
+                ),
+              ),
+
+            // Self-view kecil (PiP) saat video remote sudah tampil.
+            if (isVideo && call.hasRemote && !call.cameraOff)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 12,
+                right: 12,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 104,
+                    height: 150,
+                    child: RTCVideoView(
+                      call.localRenderer,
+                      mirror: true,
+                      objectFit:
+                          RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    ),
+                  ),
+                ),
+              ),
+
+            SafeArea(
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  // Info: avatar hanya untuk audio / saat belum ada video.
+                  if (!isVideo) ...[
+                    const Spacer(flex: 2),
+                    Avatar(
+                      url: call.peerAvatar,
+                      name: call.peerName ?? 'Pengguna',
+                      radius: 64,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  Text(
+                    call.peerName ?? 'Pengguna',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(isVideo ? Icons.videocam_rounded : Icons.call_rounded,
+                          size: 15, color: Colors.white54),
+                      const SizedBox(width: 6),
+                      Text(
+                        _status(call),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(flex: 3),
+                  _controls(context, call),
+                  const SizedBox(height: 40),
                 ],
               ),
-              const Spacer(flex: 3),
-              _controls(context, call),
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _controls(BuildContext context, CallProvider call) {
-    // Panggilan masuk → tombol Tolak & Terima.
     if (call.state == CallState.incoming) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -121,7 +184,7 @@ class CallScreen extends StatelessWidget {
             onTap: call.reject,
           ),
           _RoundButton(
-            icon: Icons.call_rounded,
+            icon: call.isVideo ? Icons.videocam_rounded : Icons.call_rounded,
             bg: const Color(0xFF22C55E),
             label: 'Terima',
             onTap: call.accept,
@@ -134,7 +197,7 @@ class CallScreen extends StatelessWidget {
       return const SizedBox(height: 72);
     }
 
-    // Outgoing / connecting / active → mute, speaker, akhiri.
+    // Outgoing / connecting / active.
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
@@ -145,14 +208,33 @@ class CallScreen extends StatelessWidget {
           label: 'Bisukan',
           onTap: call.toggleMute,
         ),
-        _RoundButton(
-          icon:
-              call.speakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-          bg: call.speakerOn ? Colors.white : Colors.white24,
-          fg: call.speakerOn ? Colors.black : Colors.white,
-          label: 'Speaker',
-          onTap: call.toggleSpeaker,
-        ),
+        if (call.isVideo)
+          _RoundButton(
+            icon: call.cameraOff
+                ? Icons.videocam_off_rounded
+                : Icons.videocam_rounded,
+            bg: call.cameraOff ? Colors.white : Colors.white24,
+            fg: call.cameraOff ? Colors.black : Colors.white,
+            label: 'Kamera',
+            onTap: call.toggleCamera,
+          )
+        else
+          _RoundButton(
+            icon: call.speakerOn
+                ? Icons.volume_up_rounded
+                : Icons.volume_down_rounded,
+            bg: call.speakerOn ? Colors.white : Colors.white24,
+            fg: call.speakerOn ? Colors.black : Colors.white,
+            label: 'Speaker',
+            onTap: call.toggleSpeaker,
+          ),
+        if (call.isVideo)
+          _RoundButton(
+            icon: Icons.cameraswitch_rounded,
+            bg: Colors.white24,
+            label: 'Balik',
+            onTap: call.switchCamera,
+          ),
         _RoundButton(
           icon: Icons.call_end_rounded,
           bg: const Color(0xFFEF4444),
@@ -186,10 +268,10 @@ class _RoundButton extends StatelessWidget {
         GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 64,
-            height: 64,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(icon, color: fg, size: 28),
+            child: Icon(icon, color: fg, size: 26),
           ),
         ),
         const SizedBox(height: 8),
