@@ -110,6 +110,12 @@ class SettingsScreen extends StatelessWidget {
             _chooseTheme(context, settings);
           }),
 
+          // Wallpaper chat
+          _item(context, Icons.wallpaper_rounded, 'Wallpaper chat',
+              _wallpaperLabel(settings.chatWallpaper), () {
+            _chooseWallpaper(context, settings);
+          }),
+
           // 4. Bantuan
           _item(context, Icons.help_rounded, 'Bantuan',
               'Pusat bantuan, hubungi kami, legal', () {
@@ -209,6 +215,105 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+
+  static const List<String> _wallpaperNames = [
+    'Default',
+    'Krem',
+    'Hijau muda',
+    'Biru muda',
+    'Pink muda',
+    'Ungu muda',
+    'Gelap',
+    'Gelap kebiruan',
+  ];
+
+  String _wallpaperLabel(int index) =>
+      (index >= 0 && index < _wallpaperNames.length)
+          ? _wallpaperNames[index]
+          : 'Default';
+
+  void _chooseWallpaper(BuildContext context, SettingsProvider settings) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        final scheme = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('Wallpaper chat',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 16)),
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (var i = 0;
+                        i < SettingsProvider.chatWallpapers.length;
+                        i++)
+                      _wallpaperSwatch(context, settings, i, scheme),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _wallpaperSwatch(BuildContext context, SettingsProvider settings,
+      int index, ColorScheme scheme) {
+    final color = SettingsProvider.chatWallpapers[index];
+    final selected = settings.chatWallpaper == index;
+    return GestureDetector(
+      onTap: () {
+        settings.setChatWallpaper(index);
+        Navigator.pop(context);
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: color ?? scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? scheme.primary : scheme.outlineVariant,
+                width: selected ? 3 : 1,
+              ),
+            ),
+            child: index == 0
+                ? Icon(Icons.format_color_reset_rounded,
+                    color: scheme.onSurfaceVariant)
+                : (selected
+                    ? const Icon(Icons.check_rounded, color: Colors.white)
+                    : null),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 64,
+            child: Text(_wallpaperLabel(index),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11)),
+          ),
+        ],
       ),
     );
   }

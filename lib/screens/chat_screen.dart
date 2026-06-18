@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import '../models/user.dart';
+import '../providers/settings_provider.dart';
 import 'forward_screen.dart';
 import 'profile_view_screen.dart';
 import 'group_info_screen.dart';
@@ -824,7 +825,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return Scaffold(
-      backgroundColor: palette.chatBackground,
+      backgroundColor: context.watch<SettingsProvider>().chatWallpaperColor ??
+          palette.chatBackground,
       appBar: _searching
           ? _buildSearchAppBar(palette)
           : AppBar(

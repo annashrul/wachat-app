@@ -39,6 +39,22 @@ class SettingsProvider extends ChangeNotifier {
   Audience aboutAudience = Audience.everyone;
   bool readReceipts = true;
 
+  // ---- Wallpaper chat (global, indeks ke [chatWallpapers]) ----
+  static const _kWallpaper = 'chat_wallpaper';
+  int chatWallpaper = 0; // 0 = default tema
+
+  /// Preset wallpaper. Index 0 = default (pakai warna tema), sisanya warna solid.
+  static const List<Color?> chatWallpapers = [
+    null, // default
+    Color(0xFFE7DDD3), // krem (ala WhatsApp)
+    Color(0xFFDCEFE3), // hijau muda
+    Color(0xFFE3E9F5), // biru muda
+    Color(0xFFF3E1EC), // pink muda
+    Color(0xFFEDE7F6), // ungu muda
+    Color(0xFF0D1418), // gelap
+    Color(0xFF1F2C33), // gelap kebiruan
+  ];
+
   // ---- Notifikasi ----
   static const _kMsgNotif = 'notif_messages';
   static const _kNotifSound = 'notif_sound';
@@ -81,6 +97,7 @@ class SettingsProvider extends ChangeNotifier {
         AudienceLabel.fromName(prefs.getString(_kPhotoAudience));
     aboutAudience = AudienceLabel.fromName(prefs.getString(_kAboutAudience));
     readReceipts = prefs.getBool(_kReadReceipts) ?? true;
+    chatWallpaper = prefs.getInt(_kWallpaper) ?? 0;
 
     // Notifikasi
     messageNotifications = prefs.getBool(_kMsgNotif) ?? true;
@@ -121,6 +138,19 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setReadReceipts(bool v) =>
       _setBool(_kReadReceipts, v, (x) => readReceipts = x);
+
+  Future<void> setChatWallpaper(int index) async {
+    chatWallpaper = index;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kWallpaper, index);
+  }
+
+  /// Warna wallpaper aktif (null → pakai default tema).
+  Color? get chatWallpaperColor =>
+      (chatWallpaper > 0 && chatWallpaper < chatWallpapers.length)
+          ? chatWallpapers[chatWallpaper]
+          : null;
 
   // ---- Notifikasi ----
   Future<void> setMessageNotifications(bool v) =>
