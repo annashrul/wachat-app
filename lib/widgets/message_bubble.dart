@@ -426,16 +426,21 @@ class MessageBubble extends StatelessWidget {
   Widget _callBubble(BuildContext context, AppPalette palette, String time) {
     final scheme = Theme.of(context).colorScheme;
     final textColor = isMine ? palette.outgoingText : palette.incomingText;
-    // content = "STATUS|durasiDetik"
+    // content = "STATUS|durasiDetik|video(1/0)"
     final parts = (message.content ?? '').split('|');
     final status = parts.isNotEmpty ? parts[0] : 'COMPLETED';
     final dur = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    final isVideoCall = parts.length > 2 && parts[2] == '1';
     final missed = status == 'MISSED' ||
         status == 'REJECTED' ||
         (status == 'CANCELED' && !isMine);
 
     IconData icon;
-    if (missed) {
+    if (isVideoCall) {
+      icon = missed
+          ? Icons.missed_video_call_rounded
+          : Icons.video_call_rounded;
+    } else if (missed) {
       icon = isMine
           ? Icons.call_missed_outgoing_rounded
           : Icons.call_missed_rounded;
@@ -475,7 +480,7 @@ class MessageBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Panggilan suara',
+                  Text(isVideoCall ? 'Panggilan video' : 'Panggilan suara',
                       style: TextStyle(
                           color: textColor, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),

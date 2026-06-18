@@ -115,7 +115,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'VOICE':
         return '🎤 Pesan suara';
       case 'CALL':
-        return '📞 Panggilan suara';
+        return (m.content ?? '').split('|').elementAtOrNull(2) == '1'
+            ? '📹 Panggilan video'
+            : '📞 Panggilan suara';
       case 'LOCATION':
         return '📍 Lokasi';
       case 'CONTACT':

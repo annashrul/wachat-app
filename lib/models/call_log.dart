@@ -7,6 +7,7 @@ class CallLog {
   final String calleeId;
   final String status; // COMPLETED | MISSED | REJECTED | CANCELED
   final int durationSec;
+  final bool video;
   final DateTime createdAt;
   final String? conversationId;
   final AppUser caller;
@@ -21,6 +22,7 @@ class CallLog {
     required this.createdAt,
     required this.caller,
     required this.callee,
+    this.video = false,
     this.conversationId,
   });
 
@@ -37,6 +39,7 @@ class CallLog {
       calleeId: j['calleeId'] as String,
       status: j['status'] as String? ?? 'COMPLETED',
       durationSec: j['durationSec'] as int? ?? 0,
+      video: j['video'] == true,
       conversationId: j['conversationId'] as String?,
       createdAt:
           DateTime.tryParse(j['createdAt'] as String? ?? '')?.toLocal() ??

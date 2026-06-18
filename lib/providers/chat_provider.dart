@@ -631,7 +631,9 @@ class ChatProvider extends ChangeNotifier {
       case 'STICKER':
         return '🙂 Stiker';
       case 'CALL':
-        return '📞 Panggilan suara';
+        return (m.content ?? '').split('|').elementAtOrNull(2) == '1'
+            ? '📹 Panggilan video'
+            : '📞 Panggilan suara';
       case 'LOCATION':
         return '📍 Lokasi';
       case 'CONTACT':

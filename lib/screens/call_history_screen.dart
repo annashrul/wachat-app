@@ -156,6 +156,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       ),
       subtitle: Row(
         children: [
+          Icon(c.video ? Icons.videocam_rounded : Icons.call_rounded,
+              size: 15, color: palette.muted),
+          const SizedBox(width: 4),
           Icon(icon, size: 15, color: iconColor),
           const SizedBox(width: 5),
           Expanded(
@@ -169,11 +172,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         ],
       ),
       trailing: IconButton(
-        icon: Icon(Icons.call_rounded,
+        tooltip: c.video ? 'Panggilan video' : 'Panggilan suara',
+        icon: Icon(c.video ? Icons.videocam_rounded : Icons.call_rounded,
             color: Theme.of(context).colorScheme.primary),
-        onPressed: () => context
-            .read<CallProvider>()
-            .startCallUser(other, conversationId: c.conversationId),
+        onPressed: () => context.read<CallProvider>().startCallUser(other,
+            conversationId: c.conversationId, video: c.video),
       ),
     );
   }

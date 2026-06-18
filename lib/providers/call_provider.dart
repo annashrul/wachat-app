@@ -541,15 +541,17 @@ class CallProvider extends ChangeNotifier {
           status: status,
           durationSec: dur,
           conversationId: conversationId,
+          video: isVideo,
         )
         .catchError((_) {});
     // Tampilkan event panggilan di dalam chat room (ala WhatsApp).
+    // content = "STATUS|durasi|video(1/0)".
     final conv = conversationId;
     if (conv != null) {
       _socket.emit('message:send', {
         'conversationId': conv,
         'type': 'CALL',
-        'content': '$status|$dur',
+        'content': '$status|$dur|${isVideo ? 1 : 0}',
       });
     }
   }

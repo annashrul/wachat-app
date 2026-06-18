@@ -16,12 +16,14 @@ class CallService {
     required String status,
     int durationSec = 0,
     String? conversationId,
+    bool video = false,
   }) async {
     await _api.dio.post('/calls', data: {
       'calleeId': calleeId,
       'status': status,
       'durationSec': durationSec,
       'conversationId': ?conversationId,
+      'video': video,
     });
   }
 
