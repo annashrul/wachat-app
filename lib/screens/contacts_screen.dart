@@ -20,9 +20,6 @@ class ContactsScreen extends StatefulWidget {
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
-  List<({String id, String? alias, AppUser user})> _contacts = [];
-  bool _loading = true;
-
   @override
   void initState() {
     super.initState();
@@ -30,19 +27,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final list = await context.read<ChatProvider>().service.getContacts();
-      if (mounted) setState(() => _contacts = list);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ApiClient.errorMessage(e))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    // Daftar kontak dikelola di ChatProvider agar realtime lintas layar
+    // (mis. ditambahkan dari banner room chat).
+    await context.read<ChatProvider>().loadContacts();
   }
 
   Future<void> _openChatWith(AppUser u) async {
@@ -69,8 +56,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _removeContact(String id) async {
     try {
-      await context.read<ChatProvider>().service.deleteContact(id);
-      await _load();
+      await context.read<ChatProvider>().deleteContact(id);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -83,6 +69,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
+    final contacts = context.watch<ChatProvider>().contacts;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kontak'),
@@ -104,20 +91,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
         icon: const Icon(Icons.person_add_alt_1_rounded),
         label: const Text('Tambah'),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _contacts.isEmpty
-              ? Center(
-                  child: Text(
-                    'Belum ada kontak.\nTekan "Tambah" untuk menyimpan kontak.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: palette.muted),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _contacts.length,
+      body: contacts.isEmpty
+          ? Center(
+              child: Text(
+                'Belum ada kontak.\nTekan "Tambah" untuk menyimpan kontak.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.muted),
+              ),
+            )
+          : ListView.builder(
+                  itemCount: contacts.length,
                   itemBuilder: (_, i) {
-                    final c = _contacts[i];
+                    final c = contacts[i];
                     final name = c.alias ?? c.user.displayName;
                     return ListTile(
                       leading: Avatar(url: c.user.avatarUrl, name: name),
@@ -189,7 +174,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
 
   Future<void> _add(AppUser u) async {
     try {
-      await context.read<ChatProvider>().service.addContact(u.id);
+      await context.read<ChatProvider>().addContact(u.id);
       if (!mounted) return;
       Navigator.pop(context);
       widget.onAdded();

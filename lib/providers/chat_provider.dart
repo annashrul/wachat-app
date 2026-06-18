@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
+import '../models/user.dart';
 import '../services/chat_service.dart';
 import '../services/socket_service.dart';
 import '../services/notification_service.dart';
@@ -129,6 +130,7 @@ class ChatProvider extends ChangeNotifier {
     _loadArchived();
     _loadPinned();
     loadStarred();
+    loadContacts();
     _expiryTimer ??=
         Timer.periodic(const Duration(seconds: 20), (_) => purgeExpiredLocal());
   }
@@ -229,6 +231,34 @@ class ChatProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_pinKey, _pinned.toList());
     } catch (_) {}
+  }
+
+  // ===== Kontak (shared, agar realtime lintas layar) =====
+  List<({String id, String? alias, AppUser user})> contacts = [];
+  final Set<String> _contactUserIds = {};
+
+  bool isSavedContact(String userId) => _contactUserIds.contains(userId);
+
+  Future<void> loadContacts() async {
+    try {
+      contacts = await _chat.getContacts();
+      _contactUserIds
+        ..clear()
+        ..addAll(contacts.map((c) => c.user.id));
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Tambah kontak lalu segarkan daftar kontak & percakapan (realtime).
+  Future<void> addContact(String userId, {String? alias}) async {
+    await _chat.addContact(userId, alias: alias);
+    await loadContacts();
+    await loadConversations();
+  }
+
+  Future<void> deleteContact(String contactId) async {
+    await _chat.deleteContact(contactId);
+    await loadContacts();
   }
 
   // ===== Pesan berbintang (server-side) =====

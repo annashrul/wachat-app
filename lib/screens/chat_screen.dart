@@ -705,8 +705,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(
                   children: [
                     Avatar(
-                      url: widget.conversation.avatarUrl,
-                      name: widget.conversation.avatarName,
+                      url: liveConv.avatarUrl,
+                      name: liveConv.avatarName,
                       radius: 19,
                     ),
                     const SizedBox(width: 12),
@@ -716,7 +716,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            widget.conversation.title,
+                            liveConv.title,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -1128,8 +1128,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final chat = context.read<ChatProvider>();
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await chat.service.addContact(peer.id);
-      await chat.loadConversations(); // segarkan → banner hilang
+      await chat.addContact(peer.id); // segarkan kontak + percakapan (realtime)
       messenger.showSnackBar(SnackBar(
           content: Text('${peer.displayName} ditambahkan ke kontak')));
     } catch (e) {
