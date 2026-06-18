@@ -116,8 +116,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return '🎤 Pesan suara';
       case 'CALL':
         return (m.content ?? '').split('|').elementAtOrNull(2) == '1'
-            ? '📹 Panggilan video'
-            : '📞 Panggilan suara';
+            ? 'Panggilan video'
+            : 'Panggilan suara';
       case 'LOCATION':
         return '📍 Lokasi';
       case 'CONTACT':
@@ -581,6 +581,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                   normal: palette.muted,
                                   read: scheme.primary,
                                   size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              // Ikon tipe panggilan (seragam dengan room/tab).
+                              if (!isTyping && c.lastMessage?.type == 'CALL') ...[
+                                Icon(
+                                  (c.lastMessage!.content ?? '')
+                                              .split('|')
+                                              .elementAtOrNull(2) ==
+                                          '1'
+                                      ? Icons.videocam_rounded
+                                      : Icons.call_rounded,
+                                  size: 14,
+                                  color: palette.muted,
                                 ),
                                 const SizedBox(width: 4),
                               ],
