@@ -259,6 +259,7 @@ class ChatProvider extends ChangeNotifier {
   Future<void> deleteContact(String contactId) async {
     await _chat.deleteContact(contactId);
     await loadContacts();
+    await loadConversations(); // judul/peerIsContact ikut update (→ nomor)
   }
 
   // ===== Pesan berbintang (server-side) =====
