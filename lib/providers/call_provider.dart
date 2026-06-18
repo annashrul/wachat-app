@@ -41,6 +41,7 @@ class CallProvider extends ChangeNotifier {
   bool cameraOff = false; // kamera lokal dimatikan sementara
   Duration callDuration = Duration.zero;
   String? endReason; // mis. "Tidak dijawab", "Tidak tersedia"
+  String? iceState; // diagnostik koneksi ICE
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
@@ -254,6 +255,17 @@ class CallProvider extends ChangeNotifier {
       } else if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _finish(reason: 'Koneksi gagal');
       }
+    };
+    // ICE state lebih andal untuk menandai "tersambung" di sebagian platform.
+    pc.onIceConnectionState = (s) {
+      iceState = s.toString().split('.').last;
+      if (s == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+          s == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+        _setActive();
+      } else if (s == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        _finish(reason: 'Koneksi gagal');
+      }
+      notifyListeners();
     };
   }
 

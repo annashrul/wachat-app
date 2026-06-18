@@ -22,7 +22,9 @@ class CallScreen extends StatelessWidget {
       case CallState.incoming:
         return c.isVideo ? 'Panggilan video masuk' : 'Panggilan suara masuk';
       case CallState.connecting:
-        return 'Menyambungkan…';
+        return c.iceState != null
+            ? 'Menyambungkan… (${c.iceState})'
+            : 'Menyambungkan…';
       case CallState.active:
         return _fmt(c.callDuration);
       case CallState.ended:
