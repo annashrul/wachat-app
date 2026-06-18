@@ -44,9 +44,11 @@ class CallScreen extends StatelessWidget {
     }
 
     final isVideo = call.isVideo;
-    // Tampilkan video remote penuh layar bila ada; jika belum, tampilkan
-    // pratinjau kamera sendiri (saat memanggil/menyambungkan).
-    final showSelfFull = isVideo && !call.hasRemote && !call.cameraOff;
+    // Render berdasarkan track video NYATA (bukan hanya flag).
+    final remoteVideo = call.hasRemoteVideo;
+    final localVideo = call.hasLocalVideo;
+    // Pratinjau kamera sendiri penuh layar saat video remote belum ada.
+    final showSelfFull = localVideo && !remoteVideo;
 
     return PopScope(
       canPop: call.state == CallState.idle,
@@ -57,8 +59,8 @@ class CallScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF0E1621),
         body: Stack(
           children: [
-            // Video remote penuh layar.
-            if (isVideo && call.hasRemote)
+            // Video remote penuh layar (dipasang saat track video benar2 ada).
+            if (remoteVideo)
               Positioned.fill(
                 child: RTCVideoView(
                   call.remoteRenderer,
@@ -77,7 +79,7 @@ class CallScreen extends StatelessWidget {
                 ),
               ),
             // Audio: renderer kecil tak terlihat agar audio lawan diputar (web).
-            if (!isVideo && call.hasRemote)
+            if (!remoteVideo && call.hasRemote)
               Opacity(
                 opacity: 0.0,
                 child: SizedBox(
@@ -87,7 +89,7 @@ class CallScreen extends StatelessWidget {
                 ),
               ),
             // Lapisan gelap agar teks terbaca di atas video.
-            if (isVideo)
+            if (remoteVideo || localVideo)
               const Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -102,7 +104,7 @@ class CallScreen extends StatelessWidget {
               ),
 
             // Self-view kecil (PiP) saat video remote sudah tampil.
-            if (isVideo && call.hasRemote && !call.cameraOff)
+            if (remoteVideo && localVideo)
               Positioned(
                 top: MediaQuery.of(context).padding.top + 12,
                 right: 12,
@@ -125,8 +127,8 @@ class CallScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 16),
-                  // Info: avatar hanya untuk audio / saat belum ada video.
-                  if (!isVideo) ...[
+                  // Avatar hanya saat tak ada video sama sekali (panggilan suara).
+                  if (!remoteVideo && !localVideo) ...[
                     const Spacer(flex: 2),
                     Avatar(
                       url: call.peerAvatar,

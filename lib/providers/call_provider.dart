@@ -79,6 +79,12 @@ class CallProvider extends ChangeNotifier {
 
   bool get inCall => state != CallState.idle;
   bool get hasRemote => remoteRenderer.srcObject != null;
+  // Berdasarkan track nyata (bukan hanya flag), agar RTCVideoView dipasang
+  // saat track video benar-benar ada → tidak hitam.
+  bool get hasRemoteVideo =>
+      remoteRenderer.srcObject?.getVideoTracks().isNotEmpty ?? false;
+  bool get hasLocalVideo =>
+      (_localStream?.getVideoTracks().isNotEmpty ?? false) && !cameraOff;
 
   void init(String myUserId) {
     _myId = myUserId;
