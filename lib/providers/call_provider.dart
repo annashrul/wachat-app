@@ -44,6 +44,7 @@ class CallProvider extends ChangeNotifier {
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
+  MediaStream? _remoteStream; // dikelola sendiri agar semua track terkumpul
   final RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
   final RTCVideoRenderer localRenderer = RTCVideoRenderer(); // self-view video
   bool _rendererReady = false;
@@ -215,6 +216,10 @@ class CallProvider extends ChangeNotifier {
     if (isVideo) {
       localRenderer.srcObject = _localStream; // self-view
     }
+    // Stream remote dikelola sendiri: tiap track masuk (audio & video)
+    // ditambahkan ke sini, lalu renderer disetel ulang agar pasti ter-render.
+    _remoteStream = await createLocalMediaStream('remote');
+    remoteRenderer.srcObject = _remoteStream;
     final pc = await createPeerConnection(_config);
     _pc = pc;
     for (final track in _localStream!.getTracks()) {
@@ -232,11 +237,16 @@ class CallProvider extends ChangeNotifier {
         });
       }
     };
-    pc.onTrack = (event) {
-      if (event.streams.isNotEmpty) {
-        remoteRenderer.srcObject = event.streams[0];
-        notifyListeners(); // agar UI memasang RTCVideoView (audio web ikut main)
+    pc.onTrack = (event) async {
+      final track = event.track;
+      // Kumpulkan track ke stream remote terkelola (hindari duplikat).
+      final existing = _remoteStream?.getTracks() ?? const [];
+      if (!existing.any((t) => t.id == track.id)) {
+        await _remoteStream?.addTrack(track);
       }
+      // Setel ulang srcObject agar renderer menyegarkan track baru (video).
+      remoteRenderer.srcObject = _remoteStream;
+      notifyListeners();
     };
     pc.onConnectionState = (s) {
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
@@ -576,6 +586,10 @@ class CallProvider extends ChangeNotifier {
         localRenderer.srcObject = null;
       } catch (_) {}
     }
+    try {
+      await _remoteStream?.dispose();
+    } catch (_) {}
+    _remoteStream = null;
     try {
       await _pc?.close();
     } catch (_) {}
