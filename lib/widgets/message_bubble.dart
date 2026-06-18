@@ -437,9 +437,8 @@ class MessageBubble extends StatelessWidget {
 
     IconData icon;
     if (isVideoCall) {
-      icon = missed
-          ? Icons.missed_video_call_rounded
-          : Icons.video_call_rounded;
+      // Ikon video seragam dengan tab Panggilan & tombol di app bar.
+      icon = Icons.videocam_rounded;
     } else if (missed) {
       icon = isMine
           ? Icons.call_missed_outgoing_rounded
