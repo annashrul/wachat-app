@@ -28,15 +28,21 @@ class WaChatApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
       ],
       child: Consumer<SettingsProvider>(
-        builder: (context, settings, _) => MaterialApp(
-          title: 'WAChat',
-          navigatorKey: NotificationService.navigatorKey,
-          debugShowCheckedModeBanner: false,
-          theme: buildLightTheme(),
-          darkTheme: buildDarkTheme(),
-          themeMode: settings.themeMode,
-          home: const _AuthGate(),
-        ),
+        builder: (context, settings, _) {
+          // Sinkronkan preferensi laporan dibaca ke ChatProvider.
+          context.read<ChatProvider>().setReadReceiptsEnabled(
+                settings.readReceipts,
+              );
+          return MaterialApp(
+            title: 'WAChat',
+            navigatorKey: NotificationService.navigatorKey,
+            debugShowCheckedModeBanner: false,
+            theme: buildLightTheme(),
+            darkTheme: buildDarkTheme(),
+            themeMode: settings.themeMode,
+            home: const _AuthGate(),
+          );
+        },
       ),
     );
   }

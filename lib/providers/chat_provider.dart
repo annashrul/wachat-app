@@ -329,16 +329,32 @@ class ChatProvider extends ChangeNotifier {
         .toSet();
   }
 
+  /// Apakah laporan dibaca (centang biru) aktif. Disinkronkan dari
+  /// [SettingsProvider]. Bila mati, di chat 1:1 kita tidak mengirim tanda
+  /// dibaca ke lawan, dan tidak menampilkan tanda dibaca dari lawan.
+  /// Grup tetap selalu memakai tanda dibaca (sesuai perilaku WhatsApp).
+  bool readReceiptsEnabled = true;
+  void setReadReceiptsEnabled(bool v) => readReceiptsEnabled = v;
+
+  /// markRead ke server + (kalau diizinkan) emit tanda dibaca ke anggota lain.
+  Future<void> _markReadAndNotify(String conversationId) async {
+    final c = conversationById(conversationId);
+    final isGroup = c?.isGroup ?? false;
+    try {
+      await _chat.markRead(conversationId);
+      if (isGroup || readReceiptsEnabled) {
+        _socket.emit('message:read', {'conversationId': conversationId});
+      }
+    } catch (_) {}
+  }
+
   /// Tandai sebuah percakapan sudah dibaca (reset badge + kabari server).
   Future<void> markConvRead(String id) async {
     final c = conversationById(id);
     if (c != null) c.unreadCount = 0;
     _syncWebBadge();
     notifyListeners();
-    try {
-      await _chat.markRead(id);
-      _socket.emit('message:read', {'conversationId': id});
-    } catch (_) {}
+    await _markReadAndNotify(id);
   }
 
   void _attachListeners() {
@@ -597,8 +613,7 @@ class ChatProvider extends ChangeNotifier {
       }
       typingByConv[msg.conversationId]?.remove(msg.senderId);
       if (!isMine) {
-        _chat.markRead(msg.conversationId);
-        _socket.emit('message:read', {'conversationId': msg.conversationId});
+        _markReadAndNotify(msg.conversationId);
       }
     }
 
@@ -727,8 +742,7 @@ class ChatProvider extends ChangeNotifier {
       messages = fresh;
       hasMore = fresh.length >= _pageSize;
       _messageCache[conversationId] = List.of(fresh);
-      await _chat.markRead(conversationId);
-      _socket.emit('message:read', {'conversationId': conversationId});
+      await _markReadAndNotify(conversationId);
       final idx = conversations.indexWhere((c) => c.id == conversationId);
       if (idx >= 0) conversations[idx].unreadCount = 0;
       _syncWebBadge();
@@ -951,7 +965,9 @@ class ChatProvider extends ChangeNotifier {
   /// Status centang untuk pesan saya.
   MessageStatus statusOf(Message m, Conversation conv) {
     if (m.pending) return MessageStatus.pending;
-    if (conv.isReadByOthers(m.createdAt, _myUserId ?? '')) {
+    // Tanda dibaca dari lawan hanya ditampilkan bila fitur aktif (atau grup).
+    if ((conv.isGroup || readReceiptsEnabled) &&
+        conv.isReadByOthers(m.createdAt, _myUserId ?? '')) {
       return MessageStatus.read;
     }
     if (conv.isDeliveredToOthers(m.createdAt, _myUserId ?? '')) {
