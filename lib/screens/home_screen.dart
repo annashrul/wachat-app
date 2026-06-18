@@ -122,6 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return '📍 Lokasi';
       case 'CONTACT':
         return '👤 Kontak';
+      case 'ALBUM':
+        return '🖼️ Foto';
       default:
         return m.content ?? '';
     }

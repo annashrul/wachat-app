@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
@@ -638,6 +639,8 @@ class ChatProvider extends ChangeNotifier {
         return '📍 Lokasi';
       case 'CONTACT':
         return '👤 Kontak';
+      case 'ALBUM':
+        return '🖼️ Foto';
       default:
         return m.content ?? '';
     }
@@ -810,6 +813,12 @@ class ChatProvider extends ChangeNotifier {
   void sendLocation(String conversationId, double lat, double lng) {
     _addOptimistic(_optimistic(conversationId, 'LOCATION',
         content: '$lat,$lng', reply: replyingTo));
+  }
+
+  /// Kirim album (beberapa foto) — content = JSON array of url.
+  void sendAlbum(String conversationId, List<String> urls) {
+    _addOptimistic(_optimistic(conversationId, 'ALBUM',
+        content: jsonEncode(urls), reply: replyingTo));
   }
 
   /// Kirim kartu kontak (content = JSON {name, phone, userId?}).

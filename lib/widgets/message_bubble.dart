@@ -786,6 +786,61 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Album: grid foto (content = JSON array url). Maks 4 tampil + "+N".
+  Widget _albumContent(BuildContext context) {
+    List urls = [];
+    try {
+      urls = jsonDecode(message.content ?? '[]') as List;
+    } catch (_) {}
+    if (urls.isEmpty) return const SizedBox.shrink();
+    final shown = urls.take(4).toList();
+    final extra = urls.length - shown.length;
+    return SizedBox(
+      width: 230,
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 3,
+        crossAxisSpacing: 3,
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            GestureDetector(
+              onTap: () => _open(shown[i] as String),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: shown[i] as String,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) =>
+                          const ColoredBox(color: Colors.black12),
+                      errorWidget: (_, _, _) =>
+                          const Icon(Icons.broken_image),
+                    ),
+                    // Tampilkan "+N" pada foto terakhir bila ada sisa.
+                    if (i == shown.length - 1 && extra > 0)
+                      ColoredBox(
+                        color: Colors.black54,
+                        child: Center(
+                          child: Text('+$extra',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Kartu kontak (content = JSON {name, phone, userId}).
   Widget _contactContent(BuildContext context, Color textColor) {
     Map<String, dynamic> data = {};
@@ -940,6 +995,8 @@ class MessageBubble extends StatelessWidget {
         return _locationContent(context, textColor);
       case 'CONTACT':
         return _contactContent(context, textColor);
+      case 'ALBUM':
+        return _albumContent(context);
       case 'IMAGE':
         if (message.viewOnce) return _viewOnceContent(textColor);
         return ClipRRect(

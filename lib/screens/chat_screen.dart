@@ -264,12 +264,55 @@ class _ChatScreenState extends State<ChatScreen> {
     _input.clear();
   }
 
+  Future<void> _takePhoto() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+          source: ImageSource.camera, imageQuality: 85);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      await _uploadAndSend(bytes, picked.name, 'IMAGE');
+    } catch (_) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Tidak bisa membuka kamera')));
+    }
+  }
+
   Future<void> _sendImage({bool viewOnce = false}) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     await _uploadAndSend(bytes, picked.name, 'IMAGE', viewOnce: viewOnce);
+  }
+
+  /// Galeri: bisa pilih banyak foto → 1 foto kirim biasa, >1 jadi album.
+  Future<void> _sendGallery() async {
+    final chat = context.read<ChatProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final picker = ImagePicker();
+    final picks = await picker.pickMultiImage();
+    if (picks.isEmpty) return;
+    if (picks.length == 1) {
+      final bytes = await picks.first.readAsBytes();
+      await _uploadAndSend(bytes, picks.first.name, 'IMAGE');
+      return;
+    }
+    setState(() => _uploading = true);
+    try {
+      final urls = <String>[];
+      for (final p in picks.take(10)) {
+        final up = await chat.service.uploadFile(await p.readAsBytes(), p.name);
+        urls.add(up.url);
+      }
+      chat.sendAlbum(_convId, urls);
+      _scrollToBottom();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   Future<void> _sendFile() async {
@@ -567,12 +610,21 @@ class _ChatScreenState extends State<ChatScreen> {
             runSpacing: 8,
             children: [
               _attachOption(
+                icon: Icons.photo_camera_rounded,
+                label: 'Kamera',
+                color: const Color(0xFFEC4899),
+                onTap: () {
+                  Navigator.pop(context);
+                  _takePhoto();
+                },
+              ),
+              _attachOption(
                 icon: Icons.image_rounded,
                 label: 'Galeri',
                 color: scheme.primary,
                 onTap: () {
                   Navigator.pop(context);
-                  _sendImage();
+                  _sendGallery();
                 },
               ),
               _attachOption(
