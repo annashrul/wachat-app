@@ -112,6 +112,17 @@ class Message {
   bool viewOnceSeen; // mutable: jadi true saat dibuka
   // Reaksi emoji (mutable agar bisa diperbarui in-place saat event socket).
   List<MessageReaction> reactions;
+  // Suara polling (userId -> optionIndex), mutable untuk update realtime.
+  List<({String userId, int option})> pollVotes;
+
+  int pollCount(int option) =>
+      pollVotes.where((v) => v.option == option).length;
+  int? myPollVote(String? userId) {
+    for (final v in pollVotes) {
+      if (v.userId == userId) return v.option;
+    }
+    return null;
+  }
 
   bool get isExpired =>
       expiresAt != null && expiresAt!.isBefore(DateTime.now());
@@ -139,6 +150,7 @@ class Message {
     this.viewOnce = false,
     this.viewOnceSeen = false,
     this.reactions = const [],
+    this.pollVotes = const [],
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -171,6 +183,13 @@ class Message {
       viewOnce: json['viewOnce'] == true,
       viewOnceSeen: json['viewOnceSeen'] == true,
       reactions: MessageReaction.listFrom(json['reactions']),
+      pollVotes: ((json['pollVotes'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => (
+                userId: e['userId'] as String? ?? '',
+                option: (e['optionIndex'] as num?)?.toInt() ?? 0,
+              ))
+          .toList(),
     );
   }
 

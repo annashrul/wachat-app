@@ -354,6 +354,7 @@ class ChatProvider extends ChangeNotifier {
       'message:edited',
       'message:reaction',
       'message:viewonce',
+      'poll:results',
       'presence',
     ]) {
       _socket.off(e);
@@ -419,6 +420,18 @@ class ChatProvider extends ChangeNotifier {
         map['conversationId'] as String?,
         map['messageId'] as String,
       );
+    });
+    _socket.on('poll:results', (data) {
+      final map = Map<String, dynamic>.from(data as Map);
+      final votes = ((map['votes'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => (
+                userId: e['userId'] as String? ?? '',
+                option: (e['optionIndex'] as num?)?.toInt() ?? 0,
+              ))
+          .toList();
+      _onPollResults(map['conversationId'] as String?,
+          map['messageId'] as String, votes);
     });
     _socket.on('message:edited', (data) {
       _onMessageEdited(
@@ -641,6 +654,8 @@ class ChatProvider extends ChangeNotifier {
         return '👤 Kontak';
       case 'ALBUM':
         return '🖼️ Foto';
+      case 'POLL':
+        return '📊 Polling';
       default:
         return m.content ?? '';
     }
@@ -813,6 +828,31 @@ class ChatProvider extends ChangeNotifier {
   void sendLocation(String conversationId, double lat, double lng) {
     _addOptimistic(_optimistic(conversationId, 'LOCATION',
         content: '$lat,$lng', reply: replyingTo));
+  }
+
+  /// Kirim polling — content = JSON {q, options:[...]}.
+  void sendPoll(String conversationId, String question, List<String> options) {
+    _addOptimistic(_optimistic(conversationId, 'POLL',
+        content: jsonEncode({'q': question, 'options': options}),
+        reply: replyingTo));
+  }
+
+  /// Voting polling (pilihan tunggal) → kirim ke server.
+  void votePoll(String messageId, int optionIndex) {
+    _socket.emit('poll:vote', {'messageId': messageId, 'optionIndex': optionIndex});
+  }
+
+  void _onPollResults(String? convId, String messageId,
+      List<({String userId, int option})> votes) {
+    for (final m in messages) {
+      if (m.id == messageId) m.pollVotes = votes;
+    }
+    if (convId != null) {
+      for (final m in (_messageCache[convId] ?? <Message>[])) {
+        if (m.id == messageId) m.pollVotes = votes;
+      }
+    }
+    notifyListeners();
   }
 
   /// Kirim album (beberapa foto) — content = JSON array of url.

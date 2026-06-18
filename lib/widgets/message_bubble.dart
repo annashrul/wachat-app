@@ -29,6 +29,9 @@ class MessageBubble extends StatelessWidget {
   final void Function(String messageId)? onViewOnce;
   // Ketuk kartu kontak → buka/mulai chat dengan kontak itu.
   final void Function(String userId, String name)? onOpenContact;
+  // Untuk polling: id user saat ini + aksi voting.
+  final String? myUserId;
+  final void Function(String messageId, int option)? onPollVote;
 
   const MessageBubble({
     super.key,
@@ -43,6 +46,8 @@ class MessageBubble extends StatelessWidget {
     this.onCallBack,
     this.onViewOnce,
     this.onOpenContact,
+    this.myUserId,
+    this.onPollVote,
   });
 
   Widget _highlightedText(Color textColor, String query) {
@@ -786,6 +791,115 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Polling: pertanyaan + opsi dengan bar persentase & jumlah suara.
+  Widget _pollContent(BuildContext context, Color textColor) {
+    Map<String, dynamic> data = {};
+    try {
+      data = jsonDecode(message.content ?? '{}') as Map<String, dynamic>;
+    } catch (_) {}
+    final q = (data['q'] as String?) ?? 'Polling';
+    final options = ((data['options'] as List?) ?? []).cast<dynamic>();
+    final total = message.pollVotes.length;
+    final myVote = message.myPollVote(myUserId);
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 250,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.poll_rounded, size: 16, color: textColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(q,
+                    style: TextStyle(
+                        color: textColor, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < options.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                onTap: onPollVote == null
+                    ? null
+                    : () => onPollVote!(message.id, i),
+                borderRadius: BorderRadius.circular(8),
+                child: _pollOption(
+                  text: options[i].toString(),
+                  count: message.pollCount(i),
+                  total: total,
+                  selected: myVote == i,
+                  textColor: textColor,
+                  accent: scheme.primary,
+                ),
+              ),
+            ),
+          Text('$total suara',
+              style: TextStyle(
+                  fontSize: 11.5, color: textColor.withValues(alpha: 0.6))),
+        ],
+      ),
+    );
+  }
+
+  Widget _pollOption({
+    required String text,
+    required int count,
+    required int total,
+    required bool selected,
+    required Color textColor,
+    required Color accent,
+  }) {
+    final frac = total == 0 ? 0.0 : count / total;
+    return Stack(
+      children: [
+        // Bar persentase.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: frac,
+            minHeight: 34,
+            backgroundColor: textColor.withValues(alpha: 0.08),
+            valueColor:
+                AlwaysStoppedAnimation(accent.withValues(alpha: 0.22)),
+          ),
+        ),
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                if (selected)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(Icons.check_circle_rounded,
+                        size: 16, color: accent),
+                  ),
+                Expanded(
+                  child: Text(text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: textColor,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500)),
+                ),
+                Text('$count',
+                    style: TextStyle(
+                        color: textColor.withValues(alpha: 0.7),
+                        fontSize: 12.5)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Album: grid foto (content = JSON array url). Maks 4 tampil + "+N".
   Widget _albumContent(BuildContext context) {
     List urls = [];
@@ -997,6 +1111,8 @@ class MessageBubble extends StatelessWidget {
         return _contactContent(context, textColor);
       case 'ALBUM':
         return _albumContent(context);
+      case 'POLL':
+        return _pollContent(context, textColor);
       case 'IMAGE':
         if (message.viewOnce) return _viewOnceContent(textColor);
         return ClipRRect(

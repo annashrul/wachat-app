@@ -124,6 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return '👤 Kontak';
       case 'ALBUM':
         return '🖼️ Foto';
+      case 'POLL':
+        return '📊 Polling';
       default:
         return m.content ?? '';
     }

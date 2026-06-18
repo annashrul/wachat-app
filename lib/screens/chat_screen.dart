@@ -515,6 +515,75 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _createPoll() async {
+    final qCtrl = TextEditingController();
+    final opts = <TextEditingController>[
+      TextEditingController(),
+      TextEditingController(),
+    ];
+    final chat = context.read<ChatProvider>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (_, setDlg) => AlertDialog(
+          title: const Text('Buat polling'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: qCtrl,
+                  decoration: const InputDecoration(labelText: 'Pertanyaan'),
+                ),
+                const SizedBox(height: 8),
+                for (var i = 0; i < opts.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: TextField(
+                      controller: opts[i],
+                      decoration:
+                          InputDecoration(labelText: 'Opsi ${i + 1}'),
+                    ),
+                  ),
+                if (opts.length < 8)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Tambah opsi'),
+                      onPressed: () =>
+                          setDlg(() => opts.add(TextEditingController())),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Kirim')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final q = qCtrl.text.trim();
+    final options =
+        opts.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
+    if (q.isEmpty || options.length < 2) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Isi pertanyaan & minimal 2 opsi')));
+      }
+      return;
+    }
+    chat.sendPoll(_convId, q, options);
+    _scrollToBottom();
+  }
+
   Future<void> _sendContact() async {
     final chat = context.read<ChatProvider>();
     final messenger = ScaffoldMessenger.of(context);
@@ -661,6 +730,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _sendContact();
+                },
+              ),
+              _attachOption(
+                icon: Icons.poll_rounded,
+                label: 'Polling',
+                color: const Color(0xFF14B8A6),
+                onTap: () {
+                  Navigator.pop(context);
+                  _createPoll();
                 },
               ),
             ],
@@ -931,6 +1009,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                           context.read<ChatProvider>()
                                               .markViewOnce(id),
                                       onOpenContact: _openContact,
+                                      myUserId: myId,
+                                      onPollVote: (id, opt) => context
+                                          .read<ChatProvider>()
+                                          .votePoll(id, opt),
                                       onQuoteTap: (id) =>
                                           _scrollToMessage(id, flash: true),
                                       onCallBack: isGroup
