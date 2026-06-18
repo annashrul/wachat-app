@@ -216,10 +216,6 @@ class CallProvider extends ChangeNotifier {
     if (isVideo) {
       localRenderer.srcObject = _localStream; // self-view
     }
-    // Stream remote dikelola sendiri: tiap track masuk (audio & video)
-    // ditambahkan ke sini, lalu renderer disetel ulang agar pasti ter-render.
-    _remoteStream = await createLocalMediaStream('remote');
-    remoteRenderer.srcObject = _remoteStream;
     final pc = await createPeerConnection(_config);
     _pc = pc;
     for (final track in _localStream!.getTracks()) {
@@ -238,14 +234,18 @@ class CallProvider extends ChangeNotifier {
       }
     };
     pc.onTrack = (event) async {
-      final track = event.track;
-      // Kumpulkan track ke stream remote terkelola (hindari duplikat).
-      final existing = _remoteStream?.getTracks() ?? const [];
-      if (!existing.any((t) => t.id == track.id)) {
-        await _remoteStream?.addTrack(track);
+      // Utamakan stream remote asli (andal di web). Bila kosong (mis. track
+      // dari transceiver recvonly), kumpulkan manual ke stream remote.
+      if (event.streams.isNotEmpty) {
+        remoteRenderer.srcObject = event.streams[0];
+      } else {
+        _remoteStream ??= await createLocalMediaStream('remote');
+        final existing = _remoteStream!.getTracks();
+        if (!existing.any((t) => t.id == event.track.id)) {
+          await _remoteStream!.addTrack(event.track);
+        }
+        remoteRenderer.srcObject = _remoteStream;
       }
-      // Setel ulang srcObject agar renderer menyegarkan track baru (video).
-      remoteRenderer.srcObject = _remoteStream;
       notifyListeners();
     };
     pc.onConnectionState = (s) {
@@ -315,8 +315,9 @@ class CallProvider extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      final offer = await _pc!.createOffer(
-          {'offerToReceiveAudio': true, 'offerToReceiveVideo': isVideo});
+      // Tanpa constraint legacy offerToReceive* — arah media ditentukan oleh
+      // track yang sudah di-addTrack (hindari transceiver recvonly ekstra).
+      final offer = await _pc!.createOffer({});
       await _pc!.setLocalDescription(offer);
       _socket.emit('call:offer', {
         'to': peerId,
@@ -336,8 +337,7 @@ class CallProvider extends ChangeNotifier {
           offer['sdp'] as String, offer['type'] as String));
       _remoteSet = true;
       await _drainCandidates();
-      final answer = await _pc!.createAnswer(
-          {'offerToReceiveAudio': true, 'offerToReceiveVideo': isVideo});
+      final answer = await _pc!.createAnswer({});
       await _pc!.setLocalDescription(answer);
       _socket.emit('call:answer', {
         'to': peerId,
