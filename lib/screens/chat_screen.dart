@@ -15,6 +15,7 @@ import '../models/message.dart';
 import '../models/user.dart';
 import '../providers/settings_provider.dart';
 import 'forward_screen.dart';
+import 'location_picker_screen.dart';
 import 'profile_view_screen.dart';
 import 'group_info_screen.dart';
 import '../providers/auth_provider.dart';
@@ -641,74 +642,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  Future<bool> _ensureLocationPermission(ScaffoldMessengerState messenger) async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Aktifkan GPS/lokasi dulu')));
-      return false;
-    }
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Izin lokasi ditolak')));
-      return false;
-    }
-    return true;
-  }
-
-  Future<void> _sendLocation() async {
-    final messenger = ScaffoldMessenger.of(context);
+  /// Buka pemilih lokasi ala WhatsApp (peta interaktif + tempat sekitar),
+  /// lalu kirim sesuai pilihan (statis / lokasi langsung).
+  Future<void> _openLocationPicker() async {
     final chat = context.read<ChatProvider>();
-    try {
-      if (!await _ensureLocationPermission(messenger)) return;
-      final pos = await Geolocator.getCurrentPosition();
-      chat.sendLocation(_convId, pos.latitude, pos.longitude);
-    } catch (_) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Gagal mengambil lokasi')));
-    }
-  }
-
-  Future<void> _sendLiveLocation() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final chat = context.read<ChatProvider>();
-    // Pilih durasi berbagi.
-    final dur = await showModalBottomSheet<Duration>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('Bagikan lokasi langsung',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            ),
-            for (final o in const [
-              (label: '15 menit', mins: 15),
-              (label: '1 jam', mins: 60),
-              (label: '8 jam', mins: 480),
-            ])
-              ListTile(
-                leading: const Icon(Icons.timer_outlined),
-                title: Text(o.label),
-                onTap: () =>
-                    Navigator.pop(context, Duration(minutes: o.mins)),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+    final result = await Navigator.of(context).push<LocationPickResult>(
+      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
     );
-    if (dur == null) return;
-    try {
-      if (!await _ensureLocationPermission(messenger)) return;
-      final pos = await Geolocator.getCurrentPosition();
+    if (result == null) return;
+    if (result.live) {
       // Suntik penyedia posisi agar provider bisa update berkala.
       chat.positionProvider = () async {
         try {
@@ -718,10 +660,10 @@ class _ChatScreenState extends State<ChatScreen> {
           return null;
         }
       };
-      chat.sendLiveLocation(_convId, pos.latitude, pos.longitude, dur);
-    } catch (_) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Gagal mengambil lokasi')));
+      chat.sendLiveLocation(
+          _convId, result.lat, result.lng, result.duration ?? const Duration(hours: 1));
+    } else {
+      chat.sendLocation(_convId, result.lat, result.lng);
     }
   }
 
@@ -773,16 +715,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 color: const Color(0xFF22C55E),
                 onTap: () {
                   Navigator.pop(context);
-                  _sendLocation();
-                },
-              ),
-              _attachOption(
-                icon: Icons.my_location_rounded,
-                label: 'Lokasi langsung',
-                color: const Color(0xFF16A34A),
-                onTap: () {
-                  Navigator.pop(context);
-                  _sendLiveLocation();
+                  _openLocationPicker();
                 },
               ),
               _attachOption(
