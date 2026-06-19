@@ -14,6 +14,7 @@ import '../services/web_notify.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/status_tick.dart';
+import '../widgets/chat_lock.dart';
 import 'chat_screen.dart';
 import 'archived_screen.dart';
 import 'starred_screen.dart';
@@ -540,12 +541,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     itemBuilder: (_, i) {
                       final c = filtered[i];
-                      final hasUnread = c.unreadCount > 0;
+                      final locked = chat.isChatLocked(c.id) &&
+                          !chat.isChatUnlockedNow(c.id);
+                      final hasUnread = c.unreadCount > 0 && !locked;
                       final typingSet = chat.typingFor(c.id);
-                      final isTyping = typingSet.isNotEmpty;
+                      final isTyping = typingSet.isNotEmpty && !locked;
                       final lastMine = c.lastMessage != null &&
                           c.lastMessage!.senderId == myId;
-                      final showTick = lastMine && !isTyping;
+                      final showTick = lastMine && !isTyping && !locked;
                       final inSelection = _selected.contains(c.id);
                       final active = _selectedConv?.id == c.id &&
                           MediaQuery.of(context).size.width >= 900;
@@ -588,8 +591,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(width: 4),
                               ],
+                              if (locked) ...[
+                                Icon(Icons.lock_rounded,
+                                    size: 14, color: palette.muted),
+                                const SizedBox(width: 4),
+                              ],
                               // Ikon tipe panggilan (seragam dengan room/tab).
-                              if (!isTyping && c.lastMessage?.type == 'CALL') ...[
+                              if (!locked &&
+                                  !isTyping &&
+                                  c.lastMessage?.type == 'CALL') ...[
                                 Icon(
                                   (c.lastMessage!.content ?? '')
                                               .split('|')
@@ -604,9 +614,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                               Expanded(
                                 child: Text(
-                                  isTyping
-                                      ? _typingPreview(c, typingSet)
-                                      : _preview(c),
+                                  locked
+                                      ? 'Chat terkunci'
+                                      : isTyping
+                                          ? _typingPreview(c, typingSet)
+                                          : _preview(c),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -799,20 +811,49 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: const Icon(Icons.delete_outline_rounded),
           onPressed: _deleteSelected,
         ),
-        if (canBlock)
+        if (canBlock || single)
           PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'block') _blockSelected(one);
+            onSelected: (v) async {
+              if (v == 'block') {
+                _blockSelected(one!);
+              } else if (v == 'lock') {
+                final id = _selected.first;
+                _clearSelection();
+                await ChatLock.lock(context, id);
+              } else if (v == 'unlock') {
+                final id = _selected.first;
+                _clearSelection();
+                await ChatLock.unlock(context, id);
+              }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'block',
-                child: Row(children: [
-                  Icon(Icons.block_rounded, size: 20),
-                  SizedBox(width: 10),
-                  Text('Blokir'),
-                ]),
-              ),
+              if (single && !chat.isChatLocked(_selected.first))
+                const PopupMenuItem(
+                  value: 'lock',
+                  child: Row(children: [
+                    Icon(Icons.lock_outline_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text('Kunci chat'),
+                  ]),
+                ),
+              if (single && chat.isChatLocked(_selected.first))
+                const PopupMenuItem(
+                  value: 'unlock',
+                  child: Row(children: [
+                    Icon(Icons.lock_open_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text('Buka kunci chat'),
+                  ]),
+                ),
+              if (canBlock)
+                const PopupMenuItem(
+                  value: 'block',
+                  child: Row(children: [
+                    Icon(Icons.block_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text('Blokir'),
+                  ]),
+                ),
             ],
           ),
       ],
@@ -988,7 +1029,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openChat(Conversation c) {
+  Future<void> _openChat(Conversation c) async {
+    // Chat terkunci: minta PIN dulu.
+    if (!await ChatLock.ensureUnlocked(context, c.id)) return;
+    if (!mounted) return;
     if (MediaQuery.of(context).size.width >= 900) {
       // Layar lebar: tampilkan di panel kanan, bukan halaman baru.
       setState(() => _selectedConv = c);

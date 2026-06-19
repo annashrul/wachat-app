@@ -23,6 +23,7 @@ import '../providers/call_provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/chat_lock.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/sticker_picker.dart';
@@ -110,6 +111,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     // Simpan teks yang belum terkirim sebagai draft.
     _chatProv.setDraft(_convId, _input.text);
+    // Kunci kembali chat saat keluar agar butuh PIN saat dibuka lagi.
+    _chatProv.relockChat(_convId);
     _chatProv.closeConversation();
     _input.dispose();
     _searchCtrl.dispose();
@@ -910,8 +913,17 @@ class _ChatScreenState extends State<ChatScreen> {
                   onPressed: () => setState(() => _searching = true),
                 ),
                 PopupMenuButton<String>(
-                  onSelected: (v) {
-                    if (v == 'disappearing') _showDisappearingDialog(liveConv);
+                  onSelected: (v) async {
+                    if (v == 'disappearing') {
+                      _showDisappearingDialog(liveConv);
+                    } else if (v == 'lock') {
+                      await ChatLock.lock(context, _convId);
+                    } else if (v == 'unlock') {
+                      final nav = Navigator.of(context);
+                      if (await ChatLock.unlock(context, _convId)) {
+                        nav.maybePop();
+                      }
+                    }
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(
@@ -926,6 +938,23 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           const SizedBox(width: 10),
                           const Text('Pesan sementara'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: chat.isChatLocked(_convId) ? 'unlock' : 'lock',
+                      child: Row(
+                        children: [
+                          Icon(
+                            chat.isChatLocked(_convId)
+                                ? Icons.lock_open_rounded
+                                : Icons.lock_outline_rounded,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(chat.isChatLocked(_convId)
+                              ? 'Buka kunci chat'
+                              : 'Kunci chat'),
                         ],
                       ),
                     ),

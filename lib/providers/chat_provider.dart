@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
@@ -130,6 +131,7 @@ class ChatProvider extends ChangeNotifier {
     _loadFavorites();
     _loadArchived();
     _loadPinned();
+    _loadLock();
     loadStarred();
     loadContacts();
     _expiryTimer ??=
@@ -231,6 +233,71 @@ class ChatProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_pinKey, _pinned.toList());
+    } catch (_) {}
+  }
+
+  // ===== Kunci chat (PIN lokal per perangkat) =====
+  static const _lockKey = 'locked_convs';
+  static const _lockPinKey = 'chat_lock_pin';
+  final Set<String> _lockedChats = {};
+  // Chat yang sudah dibuka kuncinya di sesi ini (reset saat keluar/restart).
+  final Set<String> _unlockedThisSession = {};
+  String? _lockPinHash;
+
+  bool get hasLockPin => _lockPinHash != null;
+  bool isChatLocked(String id) => _lockedChats.contains(id);
+  bool isChatUnlockedNow(String id) => _unlockedThisSession.contains(id);
+  int get lockedCount =>
+      conversations.where((c) => _lockedChats.contains(c.id)).length;
+
+  Future<void> _loadLock() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _lockedChats
+        ..clear()
+        ..addAll(prefs.getStringList(_lockKey) ?? []);
+      _lockPinHash = prefs.getString(_lockPinKey);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  static String _hashPin(String pin) =>
+      sha256.convert(utf8.encode('wachat-lock:$pin')).toString();
+
+  bool verifyLockPin(String pin) =>
+      _lockPinHash != null && _hashPin(pin) == _lockPinHash;
+
+  Future<void> setLockPin(String pin) async {
+    _lockPinHash = _hashPin(pin);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lockPinKey, _lockPinHash!);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// Tandai chat sudah dibuka kuncinya untuk sesi ini.
+  void markChatUnlocked(String id) {
+    _unlockedThisSession.add(id);
+    notifyListeners();
+  }
+
+  /// Kunci kembali chat (mis. saat keluar dari ruang chat).
+  void relockChat(String id) {
+    if (_unlockedThisSession.remove(id)) notifyListeners();
+  }
+
+  Future<void> setChatLocked(String id, bool value) async {
+    if (value) {
+      _lockedChats.add(id);
+    } else {
+      _lockedChats.remove(id);
+      _unlockedThisSession.remove(id);
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_lockKey, _lockedChats.toList());
     } catch (_) {}
   }
 
@@ -985,6 +1052,7 @@ class ChatProvider extends ChangeNotifier {
     replyingTo = null;
     _messageCache.clear();
     _drafts.clear();
+    _unlockedThisSession.clear();
     typingByConv.clear();
     for (final t in _typingTimers.values) {
       t.cancel();
