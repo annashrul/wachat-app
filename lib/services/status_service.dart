@@ -11,12 +11,22 @@ class StatusService {
     return StatusFeed.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
-  /// Daftar user yang melihat sebuah status (hanya pemilik).
-  Future<List<AppUser>> getViewers(String statusId) async {
+  /// Daftar user yang melihat sebuah status (hanya pemilik) + emoji reaksinya.
+  Future<List<({AppUser user, String? emoji})>> getViewers(
+      String statusId) async {
     final res = await _api.dio.get('/status/$statusId/viewers');
-    return (res.data as List)
-        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return (res.data as List).map((e) {
+      final m = e as Map<String, dynamic>;
+      return (
+        user: AppUser.fromJson(m),
+        emoji: m['emoji'] as String?,
+      );
+    }).toList();
+  }
+
+  /// Beri/ubah reaksi emoji pada status orang lain.
+  Future<void> react(String statusId, String emoji) async {
+    await _api.dio.post('/status/$statusId/react', data: {'emoji': emoji});
   }
 
   Future<void> create({

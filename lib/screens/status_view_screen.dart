@@ -52,6 +52,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   final _replyFocus = FocusNode();
   bool _sendingReply = false;
   bool _replyOpen = false; // mode balas terbuka (komposer + overlay)
+  String? _sentReaction; // emoji reaksi terakhir yang dikirim (highlight)
 
   static const _staticDur = Duration(seconds: 5);
 
@@ -177,6 +178,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
   Future<void> _start() async {
     await _disposeMedia();
     _advanced = false;
+    _sentReaction = null; // reset highlight reaksi untuk segmen baru
     if (!mounted) return;
     final s = _status;
     if (!_story.isMine) _service.markViewed(s.id);
@@ -354,7 +356,7 @@ class _StatusViewScreenState extends State<StatusViewScreen>
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => FutureBuilder<List<AppUser>>(
+      builder: (_) => FutureBuilder<List<({AppUser user, String? emoji})>>(
         future: _service.getViewers(id),
         builder: (_, snap) {
           final viewers = snap.data ?? [];
@@ -387,13 +389,16 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                 ),
               ),
               ...viewers.map(
-                (u) => ListTile(
+                (v) => ListTile(
                   leading: Avatar(
-                    url: u.avatarUrl,
-                    name: u.displayName,
+                    url: v.user.avatarUrl,
+                    name: v.user.displayName,
                     radius: 20,
                   ),
-                  title: Text(u.displayName),
+                  title: Text(v.user.displayName),
+                  trailing: v.emoji != null
+                      ? Text(v.emoji!, style: const TextStyle(fontSize: 22))
+                      : null,
                 ),
               ),
             ],
@@ -667,8 +672,10 @@ class _StatusViewScreenState extends State<StatusViewScreen>
                             _ownerActions(liveCount)
                           else if (_replyOpen)
                             _replyComposer(scheme)
-                          else
+                          else ...[
+                            _reactionBar(),
                             _swipeHint(),
+                          ],
                         ],
                       ),
                     ),
@@ -715,6 +722,53 @@ class _StatusViewScreenState extends State<StatusViewScreen>
           label: const Text('Hapus', style: TextStyle(color: Colors.white)),
         ),
       ],
+    );
+  }
+
+  static const _reactionEmojis = ['❤️', '😂', '😮', '😢', '🙏', '👍'];
+
+  Future<void> _react(String emoji) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sentReaction = emoji);
+    try {
+      await _service.react(_status.id, emoji);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Reaksi $emoji terkirim'),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(ApiClient.errorMessage(e))),
+        );
+      }
+    }
+  }
+
+  /// Baris reaksi cepat emoji (ala WhatsApp) untuk status orang lain.
+  Widget _reactionBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (final e in _reactionEmojis)
+            GestureDetector(
+              onTap: () => _react(e),
+              child: AnimatedScale(
+                scale: _sentReaction == e ? 1.35 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 4),
+                  child: Text(e, style: const TextStyle(fontSize: 28)),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
