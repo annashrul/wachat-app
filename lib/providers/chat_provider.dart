@@ -403,6 +403,9 @@ class ChatProvider extends ChangeNotifier {
   bool readReceiptsEnabled = true;
   void setReadReceiptsEnabled(bool v) => readReceiptsEnabled = v;
 
+  /// Alasan pesan terakhir ditolak server (mis. 'admin_only'); null bila tak ada.
+  String? lastRejectReason;
+
   /// markRead ke server + (kalau diizinkan) emit tanda dibaca ke anggota lain.
   Future<void> _markReadAndNotify(String conversationId) async {
     final c = conversationById(conversationId);
@@ -439,6 +442,7 @@ class ChatProvider extends ChangeNotifier {
       'message:viewonce',
       'poll:results',
       'location:update',
+      'message:rejected',
       'presence',
     ]) {
       _socket.off(e);
@@ -530,6 +534,18 @@ class ChatProvider extends ChangeNotifier {
       if (mid != null && convId != null && content != null) {
         _applyLiveContent(mid, convId, content);
       }
+    });
+    _socket.on('message:rejected', (data) {
+      final map = Map<String, dynamic>.from(data as Map);
+      final temp = map['clientTempId'] as String?;
+      if (temp != null) {
+        messages.removeWhere((m) => m.id == temp);
+        for (final list in _messageCache.values) {
+          list.removeWhere((m) => m.id == temp);
+        }
+      }
+      lastRejectReason = map['reason'] as String? ?? 'rejected';
+      notifyListeners();
     });
     _socket.on('presence', (data) {
       final map = Map<String, dynamic>.from(data as Map);

@@ -16,6 +16,8 @@ class Conversation {
   String? pinnedMessageId; // pesan tersemat di percakapan
   final String? description; // deskripsi grup
   final bool peerIsContact; // lawan bicara (DIRECT) tersimpan di kontak?
+  bool adminOnlyMessages; // mode pengumuman: hanya admin yang kirim
+  bool adminOnlyEdit; // hanya admin yang dapat mengubah info grup
   final Map<String, String> roles; // userId -> 'ADMIN' | 'MEMBER'
 
   bool isAdmin(String userId) => roles[userId] == 'ADMIN';
@@ -39,6 +41,8 @@ class Conversation {
     this.pinnedMessageId,
     this.description,
     this.peerIsContact = false,
+    this.adminOnlyMessages = false,
+    this.adminOnlyEdit = false,
     Map<String, String>? roles,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
@@ -112,6 +116,8 @@ class Conversation {
       pinnedMessageId: json['pinnedMessageId'] as String?,
       description: json['description'] as String?,
       peerIsContact: json['peerIsContact'] == true,
+      adminOnlyMessages: json['adminOnlyMessages'] == true,
+      adminOnlyEdit: json['adminOnlyEdit'] == true,
       roles: {
         for (final s in (json['memberStates'] as List? ?? []))
           (s as Map<String, dynamic>)['userId'] as String:

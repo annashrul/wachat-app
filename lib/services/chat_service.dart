@@ -79,6 +79,15 @@ class ChatService {
     return Conversation.fromJson(res.data as Map<String, dynamic>);
   }
 
+  Future<Conversation> setGroupPermissions(String id,
+      {bool? adminOnlyMessages, bool? adminOnlyEdit}) async {
+    final res = await _api.dio.post('/conversations/$id/permissions', data: {
+      'adminOnlyMessages': ?adminOnlyMessages,
+      'adminOnlyEdit': ?adminOnlyEdit,
+    });
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<Conversation> addMembers(String id, List<String> userIds) async {
     final res = await _api.dio
         .post('/conversations/$id/members', data: {'userIds': userIds});

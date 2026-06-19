@@ -1214,11 +1214,42 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
-          if (_mentionSuggestions.isNotEmpty) _mentionList(palette),
-          if (_editing != null) _editingBar(palette),
-          if (chat.replyingTo != null) _replyBar(chat.replyingTo!, palette),
-          _buildInputBar(palette),
+          if (liveConv.isGroup &&
+              liveConv.adminOnlyMessages &&
+              !liveConv.isAdmin(myId ?? ''))
+            _adminOnlyBanner(palette)
+          else ...[
+            if (_mentionSuggestions.isNotEmpty) _mentionList(palette),
+            if (_editing != null) _editingBar(palette),
+            if (chat.replyingTo != null) _replyBar(chat.replyingTo!, palette),
+            _buildInputBar(palette),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Banner pengganti input saat grup mode pengumuman & pengguna bukan admin.
+  Widget _adminOnlyBanner(AppPalette palette) {
+    return SafeArea(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        color: palette.cardBorder.withValues(alpha: 0.25),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_rounded, size: 18, color: palette.muted),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Hanya admin yang dapat mengirim pesan',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.muted),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

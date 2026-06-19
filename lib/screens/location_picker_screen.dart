@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -45,11 +47,21 @@ class LocationPickerScreen extends StatefulWidget {
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final _map = MapController();
+  // User-Agent hanya disetel di non-web; di browser header ini terlarang dan
+  // bisa membuat request gagal — browser memakai UA-nya sendiri.
   final _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 12),
-    receiveTimeout: const Duration(seconds: 18),
-    headers: const {'User-Agent': 'WAChat/1.0 (location picker)'},
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 30),
+    responseType: ResponseType.json,
+    headers: kIsWeb ? null : const {'User-Agent': 'WAChat/1.0 (location picker)'},
   ));
+
+  // Beberapa endpoint Overpass; dicoba berurutan sampai ada yang berhasil.
+  static const _overpassEndpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  ];
 
   LatLng _center = const LatLng(-6.2088, 106.8456); // default Jakarta
   bool _ready = false;
@@ -139,44 +151,57 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _fetchNearby(LatLng c) async {
     setState(() => _loadingPlaces = true);
-    try {
-      final lat = c.latitude;
-      final lng = c.longitude;
-      final query = '[out:json][timeout:15];'
-          '(node(around:300,$lat,$lng)[name][amenity];'
-          'node(around:300,$lat,$lng)[name][shop];'
-          'node(around:300,$lat,$lng)[name][tourism];);'
-          'out 30;';
-      final res = await _dio.post(
-        'https://overpass-api.de/api/interpreter',
-        data: 'data=${Uri.encodeComponent(query)}',
-        options: Options(
-          contentType: 'application/x-www-form-urlencoded',
-        ),
-      );
-      final elements = (res.data is Map ? res.data['elements'] : null) as List?;
-      final out = <_NearbyPlace>[];
-      for (final e in elements ?? []) {
-        final m = e as Map;
-        final tags = m['tags'] as Map?;
-        final name = tags?['name'] as String?;
-        final plat = (m['lat'] as num?)?.toDouble();
-        final plng = (m['lon'] as num?)?.toDouble();
-        if (name == null || plat == null || plng == null) continue;
-        final cat = (tags?['amenity'] ??
-                tags?['shop'] ??
-                tags?['tourism'] ??
-                'tempat')
-            .toString();
-        final dist = Geolocator.distanceBetween(lat, lng, plat, plng);
-        out.add(_NearbyPlace(name, cat, plat, plng, dist));
+    final lat = c.latitude;
+    final lng = c.longitude;
+    final query = '[out:json][timeout:25];'
+        '(node(around:400,$lat,$lng)[name][amenity];'
+        'node(around:400,$lat,$lng)[name][shop];'
+        'node(around:400,$lat,$lng)[name][tourism];);'
+        'out 40;';
+
+    List? elements;
+    for (final ep in _overpassEndpoints) {
+      try {
+        final res = await _dio.post(
+          ep,
+          data: 'data=${Uri.encodeComponent(query)}',
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+            // Jangan lempar error untuk status non-2xx (mis. 406) — coba mirror lain.
+            validateStatus: (s) => s != null && s >= 200 && s < 300,
+          ),
+        );
+        var data = res.data;
+        if (data is String) data = jsonDecode(data);
+        if (data is Map && data['elements'] is List) {
+          elements = data['elements'] as List;
+          break;
+        }
+      } catch (_) {
+        // coba endpoint berikutnya
       }
-      out.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
-      if (mounted) setState(() => _places = out.take(25).toList());
-    } catch (_) {
-      if (mounted) setState(() => _places = []);
-    } finally {
-      if (mounted) setState(() => _loadingPlaces = false);
+    }
+
+    final out = <_NearbyPlace>[];
+    for (final e in elements ?? const []) {
+      final m = e as Map;
+      final tags = m['tags'] as Map?;
+      final name = tags?['name'] as String?;
+      final plat = (m['lat'] as num?)?.toDouble();
+      final plng = (m['lon'] as num?)?.toDouble();
+      if (name == null || plat == null || plng == null) continue;
+      final cat =
+          (tags?['amenity'] ?? tags?['shop'] ?? tags?['tourism'] ?? 'tempat')
+              .toString();
+      final dist = Geolocator.distanceBetween(lat, lng, plat, plng);
+      out.add(_NearbyPlace(name, cat, plat, plng, dist));
+    }
+    out.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+    if (mounted) {
+      setState(() {
+        _places = out.take(25).toList();
+        _loadingPlaces = false;
+      });
     }
   }
 

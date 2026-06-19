@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/conversation.dart';
 import '../models/user.dart';
@@ -90,6 +91,33 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           name: nameCtrl.text.trim(), description: descCtrl.text.trim()));
     }
   }
+
+  bool get _canEditInfo => _amAdmin || !_conv.adminOnlyEdit;
+
+  /// Ganti foto grup: pilih gambar → upload → updateGroup avatarUrl.
+  Future<void> _changePhoto() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final picked = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 80);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      setState(() => _loading = true);
+      final up = await _chat.service.uploadFile(bytes, picked.name);
+      await _run(() => _chat.service.updateGroup(_conv.id, avatarUrl: up.url));
+    } catch (e) {
+      messenger.showSnackBar(
+          SnackBar(content: Text(ApiClient.errorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _setAdminOnlyMessages(bool v) =>
+      _run(() => _chat.service.setGroupPermissions(_conv.id, adminOnlyMessages: v));
+
+  Future<void> _setAdminOnlyEdit(bool v) =>
+      _run(() => _chat.service.setGroupPermissions(_conv.id, adminOnlyEdit: v));
 
   Future<void> _addMembers() async {
     final existing = _conv.members.map((m) => m.id).toSet();
@@ -249,7 +277,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       appBar: AppBar(
         title: const Text('Info grup'),
         actions: [
-          if (_amAdmin)
+          if (_canEditInfo)
             IconButton(
                 icon: const Icon(Icons.edit_rounded), onPressed: _editInfo),
         ],
@@ -262,8 +290,28 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               children: [
                 const SizedBox(height: 16),
                 Center(
-                    child: Avatar(
-                        url: _conv.avatarUrl, name: _conv.title, radius: 48)),
+                  child: Stack(
+                    children: [
+                      Avatar(
+                          url: _conv.avatarUrl, name: _conv.title, radius: 48),
+                      if (_canEditInfo)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: GestureDetector(
+                            onTap: _changePhoto,
+                            child: CircleAvatar(
+                              radius: 16,
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.primary,
+                              child: const Icon(Icons.camera_alt_rounded,
+                                  size: 18, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Center(
                   child: Text(_conv.title,
@@ -291,6 +339,31 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     title: const Text('Tambah anggota'),
                     onTap: _addMembers,
                   ),
+                if (_amAdmin) ...[
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    child: Text('Pengaturan grup',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.primary)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.campaign_rounded),
+                    title: const Text('Hanya admin yang dapat mengirim pesan'),
+                    subtitle: const Text('Jadikan grup mode pengumuman'),
+                    value: _conv.adminOnlyMessages,
+                    onChanged: _loading ? null : _setAdminOnlyMessages,
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.lock_rounded),
+                    title:
+                        const Text('Hanya admin yang dapat mengubah info grup'),
+                    subtitle: const Text('Nama, foto, dan deskripsi'),
+                    value: _conv.adminOnlyEdit,
+                    onChanged: _loading ? null : _setAdminOnlyEdit,
+                  ),
+                ],
                 const Divider(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
