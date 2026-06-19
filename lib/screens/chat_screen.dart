@@ -26,6 +26,7 @@ import '../utils/file_export.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/chat_lock.dart';
+import '../widgets/gif_picker.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/sticker_picker.dart';
@@ -804,9 +805,33 @@ class _ChatScreenState extends State<ChatScreen> {
                   _createPoll();
                 },
               ),
+              _attachOption(
+                icon: Icons.gif_box_rounded,
+                label: 'GIF',
+                color: const Color(0xFF7C3AED),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openGifPicker();
+                },
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _openGifPicker() {
+    final chat = context.read<ChatProvider>();
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => GifPicker(
+        onSelected: (url) => chat.sendGif(_convId, url),
       ),
     );
   }

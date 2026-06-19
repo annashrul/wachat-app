@@ -936,6 +936,12 @@ class ChatProvider extends ChangeNotifier {
         content: sticker, reply: replyingTo, statusRef: statusRef));
   }
 
+  /// Kirim GIF (Tenor) sebagai pesan IMAGE dengan URL langsung (tanpa upload).
+  void sendGif(String conversationId, String gifUrl) {
+    _addOptimistic(_optimistic(conversationId, 'IMAGE',
+        mediaUrl: gifUrl, mediaName: 'gif', reply: replyingTo));
+  }
+
   /// Kirim lokasi sebagai pesan (content = "lat,lng").
   void sendLocation(String conversationId, double lat, double lng) {
     _addOptimistic(_optimistic(conversationId, 'LOCATION',
