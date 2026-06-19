@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1651,6 +1652,15 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             if (mine && !m.deleted)
               ListTile(
+                leading: const Icon(Icons.info_outline_rounded),
+                title: const Text('Info'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showMessageInfo(m);
+                },
+              ),
+            if (mine && !m.deleted)
+              ListTile(
                 leading: Icon(Icons.delete_rounded, color: scheme.error),
                 title: Text('Hapus', style: TextStyle(color: scheme.error)),
                 onTap: () {
@@ -1663,6 +1673,176 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  /// Tampilkan detail "Info" untuk pesan yang saya kirim: kapan dibaca dan
+  /// diterima oleh tiap anggota lain. Memakai readAt/deliveredAt percakapan.
+  void _showMessageInfo(Message m) {
+    final chat = context.read<ChatProvider>();
+    final conv = chat.conversationById(_convId) ?? widget.conversation;
+    final myId = context.read<AuthProvider>().user?.id ?? '';
+    final others = conv.members.where((u) => u.id != myId).toList();
+    final scheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
+
+    String fmt(DateTime? dt) =>
+        dt == null ? '—' : DateFormat('d MMM, HH:mm').format(dt);
+
+    Widget stateRow(IconData icon, Color color, String label, DateTime? dt) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 12),
+              Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text(fmt(dt), style: TextStyle(color: palette.muted)),
+            ],
+          ),
+        );
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('Info pesan',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                ),
+                // Ringkasan pesan.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _infoPreview(m),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.muted),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (!conv.isGroup) ...[
+                  Builder(builder: (_) {
+                    final o = others.isNotEmpty ? others.first : null;
+                    final read = o == null ? null : conv.readAt[o.id];
+                    final delivered =
+                        o == null ? null : conv.deliveredAt[o.id];
+                    final readOk =
+                        read != null && !read.isBefore(m.createdAt);
+                    final delivOk = delivered != null &&
+                        !delivered.isBefore(m.createdAt);
+                    return Column(
+                      children: [
+                        stateRow(Icons.done_all_rounded, scheme.primary,
+                            'Dibaca', readOk ? read : null),
+                        stateRow(Icons.done_all_rounded, palette.muted,
+                            'Terkirim', delivOk ? delivered : null),
+                      ],
+                    );
+                  }),
+                ] else ...[
+                  Text('Dibaca oleh',
+                      style: TextStyle(
+                          color: palette.muted,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  ..._infoMemberRows(others, conv, m, read: true, palette: palette),
+                  const SizedBox(height: 12),
+                  Text('Terkirim ke',
+                      style: TextStyle(
+                          color: palette.muted,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  ..._infoMemberRows(others, conv, m,
+                      read: false, palette: palette),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _infoPreview(Message m) {
+    switch (m.type) {
+      case 'IMAGE':
+        return '📷 Foto';
+      case 'VIDEO':
+        return '🎬 Video';
+      case 'VOICE':
+        return '🎤 Pesan suara';
+      case 'FILE':
+        return '📎 ${m.mediaName ?? 'Dokumen'}';
+      case 'STICKER':
+        return 'Stiker';
+      case 'LOCATION':
+        return '📍 Lokasi';
+      case 'CONTACT':
+        return '👤 Kontak';
+      case 'ALBUM':
+        return '🖼️ Album';
+      case 'POLL':
+        return '📊 Polling';
+      default:
+        return m.content ?? '';
+    }
+  }
+
+  List<Widget> _infoMemberRows(
+    List<AppUser> others,
+    Conversation conv,
+    Message m, {
+    required bool read,
+    required AppPalette palette,
+  }) {
+    if (others.isEmpty) {
+      return [Text('—', style: TextStyle(color: palette.muted))];
+    }
+    final rows = <Widget>[];
+    for (final o in others) {
+      final dt = read ? conv.readAt[o.id] : conv.deliveredAt[o.id];
+      final ok = dt != null && !dt.isBefore(m.createdAt);
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Avatar(url: o.avatarUrl, name: o.displayName, radius: 16),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(o.displayName,
+                    overflow: TextOverflow.ellipsis)),
+            Text(
+              ok ? DateFormat('d MMM, HH:mm').format(dt) : 'Menunggu',
+              style: TextStyle(color: palette.muted, fontSize: 12),
+            ),
+          ],
+        ),
+      ));
+    }
+    return rows;
   }
 
   Future<void> _confirmDeleteMessage(Message m) async {
