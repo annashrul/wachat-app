@@ -38,13 +38,42 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(String phone, String password) async {
-    final res = await _auth.login(phone: phone, password: password);
+  void _completeAuth(AuthResult res) {
     user = res.user;
     _socket.connect(res.token);
     status = AuthStatus.authenticated;
     notifyListeners();
     NotificationService.instance.init();
+  }
+
+  /// Login. Mengembalikan pendingToken bila 2FA dibutuhkan (UI minta PIN),
+  /// atau null bila sudah langsung masuk.
+  Future<String?> login(String phone, String password) async {
+    final res = await _auth.login(phone: phone, password: password);
+    if (res.twoFactorRequired) return res.pendingToken;
+    _completeAuth(res.auth!);
+    return null;
+  }
+
+  /// Selesaikan login 2FA dengan PIN.
+  Future<void> verifyTwoFactor(String pendingToken, String pin) async {
+    _completeAuth(await _auth.verifyTwoFactor(pendingToken, pin));
+  }
+
+  Future<void> enableTwoFactor(String pin) async {
+    await _auth.enableTwoFactor(pin);
+    if (user != null) {
+      user = user!.copyWithTwoFactor(true);
+      notifyListeners();
+    }
+  }
+
+  Future<void> disableTwoFactor(String pin) async {
+    await _auth.disableTwoFactor(pin);
+    if (user != null) {
+      user = user!.copyWithTwoFactor(false);
+      notifyListeners();
+    }
   }
 
   Future<void> register(

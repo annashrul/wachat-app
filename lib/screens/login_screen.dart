@@ -31,10 +31,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await context.read<AuthProvider>().login(
+      final pendingToken = await context.read<AuthProvider>().login(
             _phone.text.trim(),
             _password.text,
           );
+      // 2FA aktif → minta PIN.
+      if (pendingToken != null && mounted) {
+        await _promptTwoFactor(pendingToken);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -43,6 +47,29 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _promptTwoFactor(String pendingToken) async {
+    final auth = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    while (true) {
+      if (!mounted) return;
+      final pin = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _TwoFactorPinDialog(),
+      );
+      if (pin == null) return; // batal
+      try {
+        await auth.verifyTwoFactor(pendingToken, pin);
+        return; // sukses → _AuthGate akan pindah ke home
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(ApiClient.errorMessage(e))),
+        );
+        // ulangi minta PIN (kecuali sesi kedaluwarsa → biarkan ulang login)
+      }
     }
   }
 
@@ -175,4 +202,59 @@ class _LoginScreenState extends State<LoginScreen> {
         text,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
       );
+}
+
+/// Dialog masukkan PIN verifikasi dua langkah saat login.
+class _TwoFactorPinDialog extends StatefulWidget {
+  const _TwoFactorPinDialog();
+
+  @override
+  State<_TwoFactorPinDialog> createState() => _TwoFactorPinDialogState();
+}
+
+class _TwoFactorPinDialogState extends State<_TwoFactorPinDialog> {
+  final _pin = TextEditingController();
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Verifikasi dua langkah'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Masukkan PIN 6 digit Anda untuk melanjutkan.'),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _pin,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: 'PIN',
+              counterText: '',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.pop(context, v.trim()),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _pin.text.trim()),
+          child: const Text('Verifikasi'),
+        ),
+      ],
+    );
+  }
 }

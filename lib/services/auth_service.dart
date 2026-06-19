@@ -7,6 +7,14 @@ class AuthResult {
   AuthResult(this.user, this.token);
 }
 
+/// Hasil login: bisa sukses langsung, atau butuh verifikasi PIN (2FA).
+class LoginResult {
+  final AuthResult? auth; // null bila 2FA dibutuhkan
+  final String? pendingToken; // diisi bila 2FA dibutuhkan
+  LoginResult({this.auth, this.pendingToken});
+  bool get twoFactorRequired => pendingToken != null;
+}
+
 class AuthService {
   final _api = ApiClient.instance;
 
@@ -23,7 +31,7 @@ class AuthService {
     return _handle(res.data as Map<String, dynamic>);
   }
 
-  Future<AuthResult> login({
+  Future<LoginResult> login({
     required String phone,
     required String password,
   }) async {
@@ -31,7 +39,28 @@ class AuthService {
       'phone': phone,
       'password': password,
     });
+    final data = res.data as Map<String, dynamic>;
+    if (data['twoFactorRequired'] == true) {
+      return LoginResult(pendingToken: data['pendingToken'] as String);
+    }
+    return LoginResult(auth: await _handle(data));
+  }
+
+  /// Selesaikan login 2FA dengan PIN.
+  Future<AuthResult> verifyTwoFactor(String pendingToken, String pin) async {
+    final res = await _api.dio.post('/auth/2fa/verify', data: {
+      'pendingToken': pendingToken,
+      'pin': pin,
+    });
     return _handle(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> enableTwoFactor(String pin) async {
+    await _api.dio.post('/auth/2fa/enable', data: {'pin': pin});
+  }
+
+  Future<void> disableTwoFactor(String pin) async {
+    await _api.dio.post('/auth/2fa/disable', data: {'pin': pin});
   }
 
   Future<AppUser> me() async {

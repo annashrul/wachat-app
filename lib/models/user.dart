@@ -5,6 +5,7 @@ class AppUser {
   final String? avatarUrl;
   final String? about;
   final DateTime? lastSeen;
+  final bool twoFactorEnabled;
 
   AppUser({
     required this.id,
@@ -13,6 +14,7 @@ class AppUser {
     this.avatarUrl,
     this.about,
     this.lastSeen,
+    this.twoFactorEnabled = false,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,17 @@ class AppUser {
       lastSeen: json['lastSeen'] != null
           ? DateTime.tryParse(json['lastSeen'] as String)
           : null,
+      twoFactorEnabled: json['twoFactorEnabled'] == true,
     );
   }
+
+  AppUser copyWithTwoFactor(bool enabled) => AppUser(
+        id: id,
+        phone: phone,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+        about: about,
+        lastSeen: lastSeen,
+        twoFactorEnabled: enabled,
+      );
 }
