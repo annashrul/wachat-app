@@ -26,10 +26,10 @@ class AppConfig {
   static String get apiUrl => '$baseUrl/api';
   static String get socketUrl => baseUrl;
 
-  /// API key Tenor (GIF). Dirancang untuk dipakai sisi-klien; dibatasi ke
-  /// tenor.googleapis.com. Bisa di-override saat build via --dart-define.
-  static const String tenorApiKey = String.fromEnvironment(
-    'TENOR_API_KEY',
-    defaultValue: 'AIzaSyBGm5_VqdnwyP6cYFfkQfMAAPAmJqqDddM',
+  /// API key GIPHY (GIF). Dirancang untuk dipakai sisi-klien. Bisa di-override
+  /// saat build via --dart-define=GIPHY_API_KEY=...
+  static const String giphyApiKey = String.fromEnvironment(
+    'GIPHY_API_KEY',
+    defaultValue: 'utNkHKI5xAKYUXvbj56Bjbqhi7joRHjd',
   );
 }

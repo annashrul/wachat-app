@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../theme.dart';
 
-/// Pemilih GIF (Tenor). Tampilkan [GifPicker] dalam bottom sheet; mengembalikan
+/// Pemilih GIF (GIPHY). Tampilkan [GifPicker] dalam bottom sheet; mengembalikan
 /// URL GIF terpilih lewat callback [onSelected].
 class GifPicker extends StatefulWidget {
   final void Function(String gifUrl) onSelected;
@@ -48,29 +48,28 @@ class _GifPickerState extends State<GifPicker> {
     });
     try {
       final base = query.trim().isEmpty
-          ? 'https://tenor.googleapis.com/v2/featured'
-          : 'https://tenor.googleapis.com/v2/search';
+          ? 'https://api.giphy.com/v1/gifs/trending'
+          : 'https://api.giphy.com/v1/gifs/search';
       final res = await _dio.get(base, queryParameters: {
-        'key': AppConfig.tenorApiKey,
-        'client_key': 'wachat',
+        'api_key': AppConfig.giphyApiKey,
         'limit': 30,
-        'media_filter': 'tinygif,gif',
-        'contentfilter': 'medium',
+        'rating': 'pg',
         if (query.trim().isNotEmpty) 'q': query.trim(),
       });
-      final results = (res.data is Map ? res.data['results'] : null) as List?;
+      final results = (res.data is Map ? res.data['data'] : null) as List?;
       final out = <(String, String)>[];
       for (final r in results ?? const []) {
-        final mf = (r as Map)['media_formats'] as Map?;
-        final preview = (mf?['tinygif'] as Map?)?['url'] as String?;
-        final full = (mf?['gif'] as Map?)?['url'] as String? ?? preview;
+        final imgs = (r as Map)['images'] as Map?;
+        String? urlOf(String k) => (imgs?[k] as Map?)?['url'] as String?;
+        final preview = urlOf('fixed_width_small') ?? urlOf('fixed_width');
+        final full = urlOf('downsized') ?? urlOf('original') ?? preview;
         if (preview != null && full != null) out.add((preview, full));
       }
       if (mounted) setState(() => _gifs = out);
     } catch (e) {
       if (mounted) {
         setState(() => _error =
-            'Gagal memuat GIF. Pastikan Tenor API aktif & koneksi tersedia.');
+            'Gagal memuat GIF. Periksa koneksi dan coba lagi.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -100,7 +99,7 @@ class _GifPickerState extends State<GifPicker> {
                   autofocus: false,
                   onChanged: _onQueryChanged,
                   decoration: InputDecoration(
-                    hintText: 'Cari GIF di Tenor…',
+                    hintText: 'Cari GIF di GIPHY…',
                     prefixIcon: const Icon(Icons.gif_box_rounded),
                     isDense: true,
                     filled: true,
@@ -164,7 +163,7 @@ class _GifPickerState extends State<GifPicker> {
               // Atribusi Tenor (disyaratkan oleh ketentuan Tenor).
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text('Didukung oleh Tenor',
+                child: Text('Didukung oleh GIPHY',
                     style: TextStyle(fontSize: 11, color: palette.muted)),
               ),
             ],
