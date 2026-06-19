@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../config.dart';
@@ -144,12 +143,18 @@ class _GifPickerState extends State<GifPicker> {
                                     },
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
-                                      child: CachedNetworkImage(
-                                        imageUrl: preview,
+                                      // Image.network agar GIF preview animasi
+                                      // di semua platform (termasuk web).
+                                      child: Image.network(
+                                        preview,
                                         fit: BoxFit.cover,
-                                        placeholder: (_, _) => Container(
-                                            color: Colors.black12),
-                                        errorWidget: (_, _, _) => Container(
+                                        gaplessPlayback: true,
+                                        loadingBuilder: (_, child, p) =>
+                                            p == null
+                                                ? child
+                                                : Container(
+                                                    color: Colors.black12),
+                                        errorBuilder: (_, _, _) => Container(
                                           color: Colors.black12,
                                           child: const Icon(
                                               Icons.broken_image_rounded),

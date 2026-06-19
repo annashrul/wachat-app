@@ -1143,6 +1143,13 @@ class MessageBubble extends StatelessWidget {
     return v == null ? null : Color(v);
   }
 
+  /// Apakah pesan IMAGE ini sebenarnya GIF (perlu render animasi).
+  bool get _isGif {
+    if (message.mediaName == 'gif') return true;
+    final u = (message.mediaUrl ?? '').toLowerCase();
+    return u.contains('.gif') || u.contains('giphy.com');
+  }
+
   Widget _buildContent(BuildContext context, AppPalette palette) {
     final textColor = isMine ? palette.outgoingText : palette.incomingText;
     switch (message.type) {
@@ -1160,18 +1167,36 @@ class MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: GestureDetector(
             onTap: () => _open(message.mediaUrl),
-            child: CachedNetworkImage(
-              imageUrl: message.mediaUrl ?? '',
-              width: 230,
-              fit: BoxFit.cover,
-              placeholder: (_, _) => Container(
-                width: 230,
-                height: 170,
-                color: Colors.black12,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (_, _, _) => const Icon(Icons.broken_image),
-            ),
+            child: _isGif
+                // GIF: pakai Image.network agar animasi auto-play di semua
+                // platform (CachedNetworkImage kerap hanya tampilkan 1 frame).
+                ? Image.network(
+                    message.mediaUrl ?? '',
+                    width: 230,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : Container(
+                            width: 230,
+                            height: 170,
+                            color: Colors.black12,
+                            child: const Center(
+                                child: CircularProgressIndicator()),
+                          ),
+                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
+                  )
+                : CachedNetworkImage(
+                    imageUrl: message.mediaUrl ?? '',
+                    width: 230,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => Container(
+                      width: 230,
+                      height: 170,
+                      color: Colors.black12,
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, _, _) => const Icon(Icons.broken_image),
+                  ),
           ),
         );
       case 'FILE':
