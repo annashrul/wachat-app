@@ -438,6 +438,7 @@ class ChatProvider extends ChangeNotifier {
       'message:reaction',
       'message:viewonce',
       'poll:results',
+      'location:update',
       'presence',
     ]) {
       _socket.off(e);
@@ -520,6 +521,15 @@ class ChatProvider extends ChangeNotifier {
       _onMessageEdited(
         Message.fromJson(Map<String, dynamic>.from(data as Map)),
       );
+    });
+    _socket.on('location:update', (data) {
+      final map = Map<String, dynamic>.from(data as Map);
+      final mid = map['messageId'] as String?;
+      final convId = map['conversationId'] as String?;
+      final content = map['content'] as String?;
+      if (mid != null && convId != null && content != null) {
+        _applyLiveContent(mid, convId, content);
+      }
     });
     _socket.on('presence', (data) {
       final map = Map<String, dynamic>.from(data as Map);
@@ -664,6 +674,11 @@ class ChatProvider extends ChangeNotifier {
   void _onIncomingMessage(Message msg) {
     final isActive = msg.conversationId == activeConversationId;
     final isMine = msg.senderId == _myUserId;
+
+    // Pesan live-location milik saya dikonfirmasi server → mulai timer update.
+    if (isMine && msg.clientTempId != null) {
+      _maybeStartLive(msg);
+    }
 
     if (isActive) {
       // Ganti pesan optimistic kalau cocok clientTempId.
@@ -911,6 +926,100 @@ class ChatProvider extends ChangeNotifier {
         content: '$lat,$lng', reply: replyingTo));
   }
 
+  // ===== Lokasi langsung (live location) =====
+  // tempId/messageId -> waktu berakhir; timer per pesan untuk update berkala.
+  final Map<String, DateTime> _pendingLive = {};
+  final Map<String, Timer> _liveTimers = {};
+
+  /// Mulai berbagi lokasi langsung selama [duration]. Posisi awal lat/lng.
+  void sendLiveLocation(
+      String conversationId, double lat, double lng, Duration duration) {
+    final until = DateTime.now().add(duration);
+    final content = '$lat,$lng|LIVE|${until.millisecondsSinceEpoch}';
+    final m = _optimistic(conversationId, 'LOCATION',
+        content: content, reply: replyingTo);
+    // Catat agar timer dimulai saat pesan dikonfirmasi server (punya id asli).
+    _pendingLive[m.clientTempId!] = until;
+    _addOptimistic(m);
+  }
+
+  /// Dipanggil saat pesan optimistic live diganti pesan server (id asli).
+  void _maybeStartLive(Message server) {
+    final temp = server.clientTempId;
+    if (temp == null) return;
+    final until = _pendingLive.remove(temp);
+    if (until == null) return;
+    _startLiveTimer(server.id, server.conversationId, until);
+  }
+
+  void _startLiveTimer(String messageId, String convId, DateTime until) {
+    _liveTimers[messageId]?.cancel();
+    void tick() async {
+      if (DateTime.now().isAfter(until)) {
+        stopLiveLocation(messageId, convId);
+        return;
+      }
+      try {
+        final pos = await _currentPosition?.call();
+        if (pos == null) return;
+        final content =
+            '${pos.$1},${pos.$2}|LIVE|${until.millisecondsSinceEpoch}';
+        _applyLiveContent(messageId, convId, content);
+        _socket.emit('location:update', {
+          'messageId': messageId,
+          'content': content,
+        });
+      } catch (_) {}
+    }
+
+    _liveTimers[messageId] =
+        Timer.periodic(const Duration(seconds: 15), (_) => tick());
+  }
+
+  /// Hentikan berbagi lokasi langsung (manual atau karena waktu habis).
+  void stopLiveLocation(String messageId, String convId) {
+    _liveTimers.remove(messageId)?.cancel();
+    final m = _findMessage(messageId, convId);
+    if (m != null) {
+      final segs = (m.content ?? '').split('|');
+      final coords = segs.isNotEmpty ? segs[0] : '0,0';
+      // until = sekarang → tidak aktif lagi.
+      final content = '$coords|LIVE|${DateTime.now().millisecondsSinceEpoch}';
+      _applyLiveContent(messageId, convId, content);
+      _socket.emit('location:update', {
+        'messageId': messageId,
+        'content': content,
+      });
+    }
+  }
+
+  Message? _findMessage(String messageId, String convId) {
+    for (final m in messages) {
+      if (m.id == messageId) return m;
+    }
+    for (final m in (_messageCache[convId] ?? const <Message>[])) {
+      if (m.id == messageId) return m;
+    }
+    return null;
+  }
+
+  void _applyLiveContent(String messageId, String convId, String content) {
+    final i = messages.indexWhere((m) => m.id == messageId);
+    if (i >= 0) messages[i] = messages[i].withContent(content);
+    final cache = _messageCache[convId];
+    if (cache != null) {
+      final ci = cache.indexWhere((m) => m.id == messageId);
+      if (ci >= 0) cache[ci] = cache[ci].withContent(content);
+    }
+    notifyListeners();
+  }
+
+  /// Penyedia posisi terkini (disuntik dari UI agar provider tak bergantung
+  /// langsung pada paket geolocator). Mengembalikan (lat, lng).
+  Future<(double, double)?> Function()? _currentPosition;
+  set positionProvider(Future<(double, double)?> Function()? fn) =>
+      _currentPosition = fn;
+
   /// Kirim polling — content = JSON {q, options:[...]}.
   void sendPoll(String conversationId, String question, List<String> options) {
     _addOptimistic(_optimistic(conversationId, 'POLL',
@@ -1053,6 +1162,11 @@ class ChatProvider extends ChangeNotifier {
     _messageCache.clear();
     _drafts.clear();
     _unlockedThisSession.clear();
+    for (final t in _liveTimers.values) {
+      t.cancel();
+    }
+    _liveTimers.clear();
+    _pendingLive.clear();
     typingByConv.clear();
     for (final t in _typingTimers.values) {
       t.cancel();

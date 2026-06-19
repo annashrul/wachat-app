@@ -236,6 +236,52 @@ class Message {
         reactions: reactions,
       );
 
+  /// Salinan dengan content diganti (mis. update lokasi langsung), tanpa
+  /// menandai sebagai diedit.
+  Message withContent(String newContent) => Message(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
+        createdAt: createdAt,
+        content: newContent,
+        mediaUrl: mediaUrl,
+        mediaName: mediaName,
+        senderName: senderName,
+        senderAvatar: senderAvatar,
+        pending: pending,
+        clientTempId: clientTempId,
+        forwarded: forwarded,
+        deleted: deleted,
+        replyToId: replyToId,
+        replyTo: replyTo,
+        statusRef: statusRef,
+        expiresAt: expiresAt,
+        editedAt: editedAt,
+        viewOnce: viewOnce,
+        viewOnceSeen: viewOnceSeen,
+        reactions: reactions,
+        pollVotes: pollVotes,
+      );
+
+  /// Lokasi langsung aktif? (content format `lat,lng|LIVE|<untilMillis>`)
+  bool get isLiveLocation {
+    if (type != 'LOCATION') return false;
+    final segs = (content ?? '').split('|');
+    if (segs.length < 3 || segs[1] != 'LIVE') return false;
+    final until = int.tryParse(segs[2]);
+    return until != null &&
+        DateTime.fromMillisecondsSinceEpoch(until).isAfter(DateTime.now());
+  }
+
+  /// Waktu berakhir berbagi lokasi langsung (null bila bukan live).
+  DateTime? get liveUntil {
+    final segs = (content ?? '').split('|');
+    if (segs.length < 3 || segs[1] != 'LIVE') return null;
+    final ms = int.tryParse(segs[2]);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
   /// Salinan dengan status dihapus (untuk update lokal saat message:deleted).
   Message asDeleted() => Message(
         id: id,

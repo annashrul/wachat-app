@@ -1022,12 +1022,17 @@ class MessageBubble extends StatelessWidget {
 
   /// Konten pesan lokasi: peta statis (OSM) + tombol buka di aplikasi peta.
   Widget _locationContent(BuildContext context, Color textColor) {
-    final parts = (message.content ?? '').split(',');
+    // content: "lat,lng" atau live "lat,lng|LIVE|<untilMillis>".
+    final coordsStr = (message.content ?? '').split('|').first;
+    final parts = coordsStr.split(',');
     final lat = parts.isNotEmpty ? double.tryParse(parts[0].trim()) : null;
     final lng = parts.length > 1 ? double.tryParse(parts[1].trim()) : null;
     if (lat == null || lng == null) {
       return Text('📍 Lokasi', style: TextStyle(color: textColor));
     }
+    final liveActive = message.isLiveLocation;
+    final liveUntil = message.liveUntil;
+    final wasLive = liveUntil != null; // pernah live (aktif/berakhir)
     // Thumbnail dari ubin (tile) OpenStreetMap — andal & tanpa API key.
     const zoom = 15;
     final n = 1 << zoom; // 2^zoom
@@ -1073,6 +1078,32 @@ class MessageBubble extends StatelessWidget {
                     child: Icon(Icons.location_on_rounded,
                         color: Color(0xFFEF4444), size: 36),
                   ),
+                  if (liveActive)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16A34A),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.my_location_rounded,
+                                size: 12, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text('Langsung',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1082,9 +1113,19 @@ class MessageBubble extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.location_on_rounded, size: 16, color: textColor),
+                Icon(
+                    liveActive
+                        ? Icons.my_location_rounded
+                        : Icons.location_on_rounded,
+                    size: 16,
+                    color: textColor),
                 const SizedBox(width: 4),
-                Text('Lokasi — buka peta',
+                Text(
+                    liveActive
+                        ? 'Lokasi langsung • berakhir ${DateFormat('HH:mm').format(liveUntil!)}'
+                        : wasLive
+                            ? 'Berbagi lokasi langsung berakhir'
+                            : 'Lokasi — buka peta',
                     style: TextStyle(color: textColor, fontSize: 13)),
               ],
             ),

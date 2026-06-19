@@ -641,27 +641,84 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
+  Future<bool> _ensureLocationPermission(ScaffoldMessengerState messenger) async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Aktifkan GPS/lokasi dulu')));
+      return false;
+    }
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Izin lokasi ditolak')));
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _sendLocation() async {
     final messenger = ScaffoldMessenger.of(context);
     final chat = context.read<ChatProvider>();
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Aktifkan GPS/lokasi dulu')));
-        return;
-      }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Izin lokasi ditolak')));
-        return;
-      }
+      if (!await _ensureLocationPermission(messenger)) return;
       final pos = await Geolocator.getCurrentPosition();
       chat.sendLocation(_convId, pos.latitude, pos.longitude);
+    } catch (_) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Gagal mengambil lokasi')));
+    }
+  }
+
+  Future<void> _sendLiveLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final chat = context.read<ChatProvider>();
+    // Pilih durasi berbagi.
+    final dur = await showModalBottomSheet<Duration>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Bagikan lokasi langsung',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            for (final o in const [
+              (label: '15 menit', mins: 15),
+              (label: '1 jam', mins: 60),
+              (label: '8 jam', mins: 480),
+            ])
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: Text(o.label),
+                onTap: () =>
+                    Navigator.pop(context, Duration(minutes: o.mins)),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (dur == null) return;
+    try {
+      if (!await _ensureLocationPermission(messenger)) return;
+      final pos = await Geolocator.getCurrentPosition();
+      // Suntik penyedia posisi agar provider bisa update berkala.
+      chat.positionProvider = () async {
+        try {
+          final p = await Geolocator.getCurrentPosition();
+          return (p.latitude, p.longitude);
+        } catch (_) {
+          return null;
+        }
+      };
+      chat.sendLiveLocation(_convId, pos.latitude, pos.longitude, dur);
     } catch (_) {
       messenger.showSnackBar(
           const SnackBar(content: Text('Gagal mengambil lokasi')));
@@ -717,6 +774,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _sendLocation();
+                },
+              ),
+              _attachOption(
+                icon: Icons.my_location_rounded,
+                label: 'Lokasi langsung',
+                color: const Color(0xFF16A34A),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendLiveLocation();
                 },
               ),
               _attachOption(
@@ -1677,6 +1743,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Disalin')),
                   );
+                },
+              ),
+            if (mine && m.isLiveLocation)
+              ListTile(
+                leading: Icon(Icons.stop_circle_rounded, color: scheme.error),
+                title: const Text('Hentikan berbagi lokasi'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.read<ChatProvider>().stopLiveLocation(m.id, _convId);
                 },
               ),
             if (mine && !m.deleted)
