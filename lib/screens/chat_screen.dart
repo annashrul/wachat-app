@@ -22,6 +22,7 @@ import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/call_provider.dart';
 import '../services/api_client.dart';
+import '../utils/file_export.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/chat_lock.dart';
@@ -667,6 +668,64 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Ekspor isi chat (yang sudah dimuat) ke file teks lalu bagikan/unduh.
+  Future<void> _exportChat(Conversation conv) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final chat = context.read<ChatProvider>();
+    final myId = context.read<AuthProvider>().user?.id ?? '';
+    final msgs = List<Message>.from(chat.messages)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    final buf = StringBuffer();
+    buf.writeln('Ekspor chat WAChat — ${conv.title}');
+    buf.writeln('Diekspor: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}');
+    buf.writeln('');
+    for (final m in msgs) {
+      final t = DateFormat('dd/MM/yy HH:mm').format(m.createdAt);
+      final sender =
+          m.senderId == myId ? 'Anda' : (m.senderName ?? 'Pengguna');
+      buf.writeln('[$t] $sender: ${_exportBody(m)}');
+    }
+
+    try {
+      final safe = conv.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+      final fname = 'Chat WAChat - ${safe.isEmpty ? 'chat' : safe}.txt';
+      await exportTextFile(fname, buf.toString(),
+          subject: 'Ekspor chat ${conv.title}');
+    } catch (e) {
+      messenger.showSnackBar(
+          SnackBar(content: Text('Gagal mengekspor: $e')));
+    }
+  }
+
+  String _exportBody(Message m) {
+    if (m.deleted) return 'Pesan ini telah dihapus';
+    switch (m.type) {
+      case 'IMAGE':
+        return '<Media: Foto>';
+      case 'VIDEO':
+        return '<Media: Video>';
+      case 'VOICE':
+        return '<Media: Pesan suara>';
+      case 'FILE':
+        return '<Dokumen: ${m.mediaName ?? 'file'}>';
+      case 'STICKER':
+        return '<Stiker>';
+      case 'LOCATION':
+        return m.isLiveLocation ? '<Lokasi langsung>' : '<Lokasi>';
+      case 'CONTACT':
+        return '<Kontak>';
+      case 'ALBUM':
+        return '<Album foto>';
+      case 'POLL':
+        return '<Polling>';
+      case 'CALL':
+        return '<Panggilan>';
+      default:
+        return m.content ?? '';
+    }
+  }
+
   void _showAttachMenu() {
     final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
@@ -922,6 +981,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (await ChatLock.unlock(context, _convId)) {
                         nav.maybePop();
                       }
+                    } else if (v == 'export') {
+                      _exportChat(liveConv);
                     }
                   },
                   itemBuilder: (_) => [
@@ -954,6 +1015,16 @@ class _ChatScreenState extends State<ChatScreen> {
                           Text(chat.isChatLocked(_convId)
                               ? 'Buka kunci chat'
                               : 'Kunci chat'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'export',
+                      child: Row(
+                        children: [
+                          Icon(Icons.ios_share_rounded, size: 20),
+                          SizedBox(width: 10),
+                          Text('Ekspor chat'),
                         ],
                       ),
                     ),
