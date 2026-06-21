@@ -7,6 +7,7 @@ import '../providers/chat_provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import 'broadcast_screen.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({super.key});
@@ -200,6 +201,21 @@ class _NewChatScreenState extends State<NewChatScreen> {
               title: const Text('Pesan ke diri sendiri'),
               subtitle: const Text('Catatan, tautan, & pengingat'),
               onTap: _startSelfChat,
+            ),
+          if (!_groupMode)
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                radius: 24,
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                child: const Icon(Icons.campaign_rounded, color: Colors.white),
+              ),
+              title: const Text('Pesan siaran'),
+              subtitle: const Text('Kirim ke banyak kontak sekaligus'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const BroadcastScreen()),
+              ),
             ),
           Expanded(
             child: _results.isEmpty
