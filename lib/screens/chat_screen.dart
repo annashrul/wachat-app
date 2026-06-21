@@ -992,7 +992,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     onPressed: () =>
                         context.read<CallProvider>().startCall(liveConv),
                   ),
-                if (isGroup)
+                if (isGroup && !liveConv.isChannel)
                   IconButton(
                     icon: const Icon(Icons.call_rounded),
                     tooltip: 'Panggilan grup',

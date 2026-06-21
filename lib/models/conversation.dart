@@ -19,6 +19,7 @@ class Conversation {
   bool adminOnlyMessages; // mode pengumuman: hanya admin yang kirim
   bool adminOnlyEdit; // hanya admin yang dapat mengubah info grup
   final bool isSelfChat; // chat dengan diri sendiri
+  final bool isChannel; // saluran (channel) satu-arah
   final Map<String, String> roles; // userId -> 'ADMIN' | 'MEMBER'
 
   bool isAdmin(String userId) => roles[userId] == 'ADMIN';
@@ -45,6 +46,7 @@ class Conversation {
     this.adminOnlyMessages = false,
     this.adminOnlyEdit = false,
     this.isSelfChat = false,
+    this.isChannel = false,
     Map<String, String>? roles,
     Map<String, DateTime>? readAt,
     Map<String, DateTime>? deliveredAt,
@@ -121,6 +123,7 @@ class Conversation {
       adminOnlyMessages: json['adminOnlyMessages'] == true,
       adminOnlyEdit: json['adminOnlyEdit'] == true,
       isSelfChat: json['isSelfChat'] == true,
+      isChannel: json['isChannel'] == true,
       roles: {
         for (final s in (json['memberStates'] as List? ?? []))
           (s as Map<String, dynamic>)['userId'] as String:

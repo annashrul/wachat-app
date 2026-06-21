@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../models/channel.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import '../models/user.dart';
@@ -67,6 +68,33 @@ class ChatService {
   Future<Conversation> selfChat() async {
     final res = await _api.dio.post('/conversations/self');
     return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ===== Saluran (Channel) =====
+  Future<List<ChannelSummary>> listChannels() async {
+    final res = await _api.dio.get('/conversations/channels/all');
+    return (res.data as List)
+        .map((e) => ChannelSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Conversation> createChannel(String name,
+      {String? description, String? avatarUrl}) async {
+    final res = await _api.dio.post('/conversations/channels', data: {
+      'name': name,
+      'description': ?description,
+      'avatarUrl': ?avatarUrl,
+    });
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> followChannel(String id) async {
+    final res = await _api.dio.post('/conversations/channels/$id/follow');
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> unfollowChannel(String id) async {
+    await _api.dio.post('/conversations/channels/$id/unfollow');
   }
 
   Future<Conversation> getConversation(String id) async {
