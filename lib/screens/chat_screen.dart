@@ -1017,6 +1017,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       }
                     } else if (v == 'export') {
                       _exportChat(liveConv);
+                    } else if (v == 'clear') {
+                      _confirmClearChat();
                     }
                   },
                   itemBuilder: (_) => [
@@ -1059,6 +1061,16 @@ class _ChatScreenState extends State<ChatScreen> {
                           Icon(Icons.ios_share_rounded, size: 20),
                           SizedBox(width: 10),
                           Text('Ekspor chat'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Row(
+                        children: [
+                          Icon(Icons.cleaning_services_rounded, size: 20),
+                          SizedBox(width: 10),
+                          Text('Kosongkan chat'),
                         ],
                       ),
                     ),
@@ -1832,10 +1844,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   _showMessageInfo(m);
                 },
               ),
+            // Hapus untuk saya — tersedia untuk semua pesan (lokal).
+            ListTile(
+              leading: const Icon(Icons.visibility_off_rounded),
+              title: const Text('Hapus untuk saya'),
+              onTap: () {
+                Navigator.pop(context);
+                context.read<ChatProvider>().hideMessageForMe(m.id);
+              },
+            ),
             if (mine && !m.deleted)
               ListTile(
                 leading: Icon(Icons.delete_rounded, color: scheme.error),
-                title: Text('Hapus', style: TextStyle(color: scheme.error)),
+                title: Text('Hapus untuk semua',
+                    style: TextStyle(color: scheme.error)),
                 onTap: () {
                   Navigator.pop(context);
                   _confirmDeleteMessage(m);
@@ -2038,6 +2060,31 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (ok == true && mounted) {
       context.read<ChatProvider>().deleteMessage(m.id);
+    }
+  }
+
+  Future<void> _confirmClearChat() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Kosongkan chat?'),
+        content: const Text(
+            'Semua pesan akan disembunyikan di perangkat ini saja. '
+            'Pesan tetap ada untuk lawan bicara.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kosongkan'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      context.read<ChatProvider>().clearChatForMe(_convId);
     }
   }
 

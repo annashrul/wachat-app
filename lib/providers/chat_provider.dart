@@ -46,7 +46,7 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final oldest = messages.first.id;
-      final older = await _chat.getMessages(convId, before: oldest);
+      final older = _visible(await _chat.getMessages(convId, before: oldest));
       if (older.length < _pageSize) hasMore = false;
       if (older.isNotEmpty) {
         messages = [...older, ...messages];
@@ -132,6 +132,7 @@ class ChatProvider extends ChangeNotifier {
     _loadArchived();
     _loadPinned();
     _loadLock();
+    _loadLocalHidden();
     loadStarred();
     loadContacts();
     _expiryTimer ??=
@@ -629,6 +630,65 @@ class ChatProvider extends ChangeNotifier {
     _socket.emit('message:delete', {'messageId': messageId});
   }
 
+  // ===== Hapus untuk saya / kosongkan chat (lokal per perangkat) =====
+  static const _hiddenKey = 'hidden_msgs';
+  static const _clearedKey = 'cleared_at';
+  final Set<String> _hiddenMsgIds = {};
+  final Map<String, int> _clearedAt = {}; // convId -> millis
+
+  Future<void> _loadLocalHidden() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _hiddenMsgIds
+        ..clear()
+        ..addAll(prefs.getStringList(_hiddenKey) ?? []);
+      final raw = prefs.getString(_clearedKey);
+      if (raw != null) {
+        final m = jsonDecode(raw) as Map<String, dynamic>;
+        _clearedAt
+          ..clear()
+          ..addAll(m.map((k, v) => MapEntry(k, (v as num).toInt())));
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  bool _isHidden(Message m) {
+    if (_hiddenMsgIds.contains(m.id)) return true;
+    final c = _clearedAt[m.conversationId];
+    return c != null && m.createdAt.millisecondsSinceEpoch <= c;
+  }
+
+  /// Saring pesan tersembunyi (hapus-untuk-saya / kosongkan chat).
+  List<Message> _visible(List<Message> list) =>
+      list.where((m) => !_isHidden(m)).toList();
+
+  /// Hapus pesan hanya di perangkat ini (tidak memengaruhi lawan bicara).
+  Future<void> hideMessageForMe(String messageId) async {
+    _hiddenMsgIds.add(messageId);
+    messages.removeWhere((m) => m.id == messageId);
+    for (final list in _messageCache.values) {
+      list.removeWhere((m) => m.id == messageId);
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_hiddenKey, _hiddenMsgIds.toList());
+    } catch (_) {}
+  }
+
+  /// Kosongkan chat (sembunyikan semua pesan sampai sekarang) di perangkat ini.
+  Future<void> clearChatForMe(String conversationId) async {
+    _clearedAt[conversationId] = DateTime.now().millisecondsSinceEpoch;
+    if (conversationId == activeConversationId) messages = [];
+    _messageCache[conversationId] = [];
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_clearedKey, jsonEncode(_clearedAt));
+    } catch (_) {}
+  }
+
   Future<void> deleteConversation(String conversationId) async {
     await _chat.deleteConversation(conversationId);
     conversations.removeWhere((c) => c.id == conversationId);
@@ -836,7 +896,7 @@ class ChatProvider extends ChangeNotifier {
 
     _socket.emit('conversation:join', {'conversationId': conversationId});
     try {
-      final fresh = await _chat.getMessages(conversationId);
+      final fresh = _visible(await _chat.getMessages(conversationId));
       messages = fresh;
       hasMore = fresh.length >= _pageSize;
       _messageCache[conversationId] = List.of(fresh);
