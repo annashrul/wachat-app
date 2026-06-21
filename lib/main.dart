@@ -35,6 +35,11 @@ class WaChatApp extends StatelessWidget {
           context.read<ChatProvider>().setReadReceiptsEnabled(
                 settings.readReceipts,
               );
+          // Sinkronkan preferensi bunyi notifikasi (aktif bila notifikasi pesan
+          // & suara dua-duanya menyala).
+          context.read<ChatProvider>().setSoundEnabled(
+                settings.notificationSound && settings.messageNotifications,
+              );
           return MaterialApp(
             title: 'WAChat',
             navigatorKey: NotificationService.navigatorKey,

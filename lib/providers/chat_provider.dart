@@ -10,6 +10,7 @@ import '../services/chat_service.dart';
 import '../services/socket_service.dart';
 import '../services/notification_service.dart';
 import '../services/web_notify.dart';
+import '../services/sound_service.dart';
 import '../services/app_badge.dart';
 
 /// Mengelola daftar percakapan + pesan percakapan aktif, status koneksi,
@@ -403,6 +404,10 @@ class ChatProvider extends ChangeNotifier {
   /// Grup tetap selalu memakai tanda dibaca (sesuai perilaku WhatsApp).
   bool readReceiptsEnabled = true;
   void setReadReceiptsEnabled(bool v) => readReceiptsEnabled = v;
+
+  /// Bunyi notifikasi pesan masuk aktif (disinkronkan dari SettingsProvider).
+  bool soundEnabled = true;
+  void setSoundEnabled(bool v) => soundEnabled = v;
 
   /// Alasan pesan terakhir ditolak server (mis. 'admin_only'); null bila tak ada.
   String? lastRejectReason;
@@ -799,13 +804,15 @@ class ChatProvider extends ChangeNotifier {
     } else if (!isMine) {
       loadConversations();
     }
-    // Notifikasi browser (web) untuk pesan masuk dari orang lain (kecuali bisu).
+    // Notifikasi browser (web) + bunyi untuk pesan masuk dari orang lain
+    // (kecuali percakapan dibisukan).
     if (!isMine && !(conversationById(msg.conversationId)?.muted ?? false)) {
       final c = conversationById(msg.conversationId);
       final body = c != null && c.isGroup
           ? '${msg.senderName ?? ''}: ${_previewText(msg)}'
           : _previewText(msg);
       WebNotify.notify(title: convTitle, body: body);
+      if (soundEnabled) SoundService.instance.playNotify();
     }
     // Update badge seketika (tab latar belakang tidak menunggu rebuild).
     _syncWebBadge();
