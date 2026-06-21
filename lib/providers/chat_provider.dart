@@ -444,6 +444,7 @@ class ChatProvider extends ChangeNotifier {
       'poll:results',
       'location:update',
       'message:rejected',
+      'conversation:changed',
       'presence',
     ]) {
       _socket.off(e);
@@ -535,6 +536,10 @@ class ChatProvider extends ChangeNotifier {
       if (mid != null && convId != null && content != null) {
         _applyLiveContent(mid, convId, content);
       }
+    });
+    _socket.on('conversation:changed', (_) {
+      // Anggota grup berubah / info grup diubah → segarkan daftar percakapan.
+      loadConversations();
     });
     _socket.on('message:rejected', (data) {
       final map = Map<String, dynamic>.from(data as Map);
