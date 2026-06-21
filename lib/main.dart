@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/call_provider.dart';
+import 'providers/group_call_provider.dart';
 import 'providers/status_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/notification_service.dart';
@@ -24,6 +25,7 @@ class WaChatApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()..bootstrap()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => CallProvider()),
+        ChangeNotifierProvider(create: (_) => GroupCallProvider()),
         ChangeNotifierProvider(create: (_) => StatusProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
       ],

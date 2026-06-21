@@ -21,6 +21,7 @@ import 'group_info_screen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/call_provider.dart';
+import '../providers/group_call_provider.dart';
 import '../services/api_client.dart';
 import '../utils/file_export.dart';
 import '../theme.dart';
@@ -990,6 +991,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     tooltip: 'Panggilan suara',
                     onPressed: () =>
                         context.read<CallProvider>().startCall(liveConv),
+                  ),
+                if (isGroup)
+                  IconButton(
+                    icon: const Icon(Icons.call_rounded),
+                    tooltip: 'Panggilan grup',
+                    onPressed: () => context
+                        .read<GroupCallProvider>()
+                        .start(liveConv.id, liveConv.title),
                   ),
                 IconButton(
                   icon: const Icon(Icons.search_rounded),

@@ -7,6 +7,7 @@ import '../models/conversation.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/call_provider.dart';
+import '../providers/group_call_provider.dart';
 import '../providers/status_provider.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
@@ -53,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (auth.userId != null) {
         chat.init(auth.userId!);
         context.read<CallProvider>().init(auth.userId!);
+        context.read<GroupCallProvider>().init();
         context.read<StatusProvider>().init(auth.userId!);
       }
       chat.loadConversations();
