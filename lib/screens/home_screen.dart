@@ -571,14 +571,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: Colors.white),
                               )
                             : _chatLeading(c, status, myId, scheme, palette),
-                        title: Text(
-                          c.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15.5,
-                          ),
+                        title: Row(
+                          children: [
+                            if (c.isChannel) ...[
+                              Icon(Icons.campaign_rounded,
+                                  size: 15, color: scheme.primary),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: Text(
+                                c.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15.5,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 3),
