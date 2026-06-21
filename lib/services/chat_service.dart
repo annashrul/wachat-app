@@ -64,6 +64,11 @@ class ChatService {
     await _api.dio.delete('/conversations/$conversationId');
   }
 
+  Future<Conversation> selfChat() async {
+    final res = await _api.dio.post('/conversations/self');
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<Conversation> getConversation(String id) async {
     final res = await _api.dio.get('/conversations/$id');
     return Conversation.fromJson(res.data as Map<String, dynamic>);

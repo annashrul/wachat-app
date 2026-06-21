@@ -74,6 +74,19 @@ class _NewChatScreenState extends State<NewChatScreen> {
     }
   }
 
+  Future<void> _startSelfChat() async {
+    try {
+      final c = await context.read<ChatProvider>().service.selfChat();
+      if (mounted) Navigator.of(context).pop<Conversation>(c);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiClient.errorMessage(e))),
+        );
+      }
+    }
+  }
+
   Future<void> _createGroup() async {
     if (_groupName.text.trim().isEmpty || _selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,6 +188,19 @@ class _NewChatScreenState extends State<NewChatScreen> {
             ),
           ),
           if (_loading) const LinearProgressIndicator(minHeight: 2),
+          if (!_groupMode)
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                radius: 24,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: const Icon(Icons.bookmark_rounded, color: Colors.white),
+              ),
+              title: const Text('Pesan ke diri sendiri'),
+              subtitle: const Text('Catatan, tautan, & pengingat'),
+              onTap: _startSelfChat,
+            ),
           Expanded(
             child: _results.isEmpty
                 ? Center(
