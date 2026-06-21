@@ -4,6 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/status.dart';
+import '../models/channel.dart';
+import '../providers/chat_provider.dart';
+import 'channels_screen.dart';
+import 'chat_screen.dart';
 import 'status_camera_screen.dart';
 import 'status_photo_editor_screen.dart';
 import 'status_finalize_screen.dart';
@@ -23,12 +27,33 @@ class StatusScreen extends StatefulWidget {
 }
 
 class _StatusScreenState extends State<StatusScreen> {
+  List<ChannelSummary> _channels = [];
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StatusProvider>().loadFeed();
+      _loadChannels();
     });
+  }
+
+  Future<void> _loadChannels() async {
+    try {
+      final list = await context.read<ChatProvider>().service.listChannels();
+      if (mounted) setState(() => _channels = list);
+    } catch (_) {}
+  }
+
+  Future<void> _openChannel(String id) async {
+    final chat = context.read<ChatProvider>();
+    final nav = Navigator.of(context);
+    try {
+      final conv = await chat.service.getConversation(id);
+      await nav.push(
+          MaterialPageRoute(builder: (_) => ChatScreen(conversation: conv)));
+      _loadChannels();
+    } catch (_) {}
   }
 
   /// Kamera-pertama (HP) atau pilih file (web) → editor → finalisasi.
@@ -176,7 +201,10 @@ class _StatusScreenState extends State<StatusScreen> {
       body: status.loading && mine.isEmpty && others.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => context.read<StatusProvider>().loadFeed(),
+              onRefresh: () async {
+                await context.read<StatusProvider>().loadFeed();
+                await _loadChannels();
+              },
               child: ListView(
                 children: [
                   ListTile(
@@ -231,6 +259,79 @@ class _StatusScreenState extends State<StatusScreen> {
                                   color: palette.muted, fontSize: 12.5)),
                           onTap: () => _viewEntry(e),
                         )),
+
+                  // ===== Saluran =====
+                  Divider(height: 1, color: palette.cardBorder),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
+                    child: Row(
+                      children: [
+                        Text('Saluran',
+                            style: TextStyle(
+                                color: palette.muted,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5)),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => const ChannelsScreen()));
+                            _loadChannels();
+                          },
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Temukan'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  for (final c in _channels.where((c) => c.following))
+                    ListTile(
+                      leading: Stack(
+                        children: [
+                          Avatar(
+                              url: c.avatarUrl, name: c.title, radius: 24),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: palette.chatBackground, width: 1.5),
+                              ),
+                              child: const Icon(Icons.campaign_rounded,
+                                  size: 11, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      title: Text(c.title,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('${c.followerCount} pengikut',
+                          style: TextStyle(
+                              color: palette.muted, fontSize: 12.5)),
+                      onTap: () => _openChannel(c.id),
+                    ),
+                  if (_channels.where((c) => c.following).isEmpty)
+                    ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: scheme.primary,
+                        child: const Icon(Icons.campaign_rounded,
+                            color: Colors.white),
+                      ),
+                      title: const Text('Temukan saluran'),
+                      subtitle: Text('Ikuti saluran untuk menerima pembaruan',
+                          style: TextStyle(
+                              color: palette.muted, fontSize: 12.5)),
+                      onTap: () async {
+                        await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const ChannelsScreen()));
+                        _loadChannels();
+                      },
+                    ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
