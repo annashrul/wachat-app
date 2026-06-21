@@ -60,6 +60,9 @@ class AuthProvider extends ChangeNotifier {
     _completeAuth(await _auth.verifyTwoFactor(pendingToken, pin));
   }
 
+  Future<List<DeviceSession>> listDevices() => _auth.listDevices();
+  Future<void> revokeDevice(String id) => _auth.revokeDevice(id);
+
   Future<void> enableTwoFactor(String pin) async {
     await _auth.enableTwoFactor(pin);
     if (user != null) {

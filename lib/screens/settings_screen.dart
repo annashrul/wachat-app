@@ -10,6 +10,7 @@ import 'qr_screen.dart';
 import 'settings/account_settings_screen.dart';
 import 'settings/privacy_settings_screen.dart';
 import 'settings/notification_settings_screen.dart';
+import 'settings/linked_devices_screen.dart';
 import 'settings/help_settings_screen.dart';
 import 'settings/about_settings_screen.dart';
 
@@ -92,6 +93,15 @@ class SettingsScreen extends StatelessWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                   builder: (_) => const PrivacySettingsScreen()),
+            );
+          }),
+
+          // Perangkat tertaut
+          _item(context, Icons.devices_rounded, 'Perangkat tertaut',
+              'Kelola perangkat yang masuk ke akun', () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const LinkedDevicesScreen()),
             );
           }),
 

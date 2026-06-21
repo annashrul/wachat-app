@@ -1,5 +1,49 @@
+import 'package:flutter/foundation.dart';
 import '../models/user.dart';
 import 'api_client.dart';
+
+/// Info perangkat untuk daftar "perangkat tertaut".
+({String label, String platform}) deviceInfo() {
+  if (kIsWeb) return (label: 'Browser (Web)', platform: 'web');
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+      return (label: 'Perangkat Android', platform: 'android');
+    case TargetPlatform.iOS:
+      return (label: 'iPhone/iPad', platform: 'ios');
+    case TargetPlatform.windows:
+      return (label: 'Windows', platform: 'desktop');
+    case TargetPlatform.macOS:
+      return (label: 'Mac', platform: 'desktop');
+    case TargetPlatform.linux:
+      return (label: 'Linux', platform: 'desktop');
+    default:
+      return (label: 'Perangkat', platform: 'unknown');
+  }
+}
+
+/// Satu sesi perangkat tertaut.
+class DeviceSession {
+  final String id;
+  final String label;
+  final String platform;
+  final DateTime? lastActiveAt;
+  final bool current;
+  DeviceSession({
+    required this.id,
+    required this.label,
+    required this.platform,
+    this.lastActiveAt,
+    this.current = false,
+  });
+
+  factory DeviceSession.fromJson(Map<String, dynamic> j) => DeviceSession(
+        id: j['id'] as String,
+        label: j['label'] as String? ?? 'Perangkat',
+        platform: j['platform'] as String? ?? 'unknown',
+        lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
+        current: j['current'] == true,
+      );
+}
 
 class AuthResult {
   final AppUser user;
@@ -23,10 +67,13 @@ class AuthService {
     required String displayName,
     required String password,
   }) async {
+    final d = deviceInfo();
     final res = await _api.dio.post('/auth/register', data: {
       'phone': phone,
       'displayName': displayName,
       'password': password,
+      'deviceLabel': d.label,
+      'platform': d.platform,
     });
     return _handle(res.data as Map<String, dynamic>);
   }
@@ -35,9 +82,12 @@ class AuthService {
     required String phone,
     required String password,
   }) async {
+    final d = deviceInfo();
     final res = await _api.dio.post('/auth/login', data: {
       'phone': phone,
       'password': password,
+      'deviceLabel': d.label,
+      'platform': d.platform,
     });
     final data = res.data as Map<String, dynamic>;
     if (data['twoFactorRequired'] == true) {
@@ -53,6 +103,17 @@ class AuthService {
       'pin': pin,
     });
     return _handle(res.data as Map<String, dynamic>);
+  }
+
+  Future<List<DeviceSession>> listDevices() async {
+    final res = await _api.dio.get('/auth/devices');
+    return (res.data as List)
+        .map((e) => DeviceSession.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> revokeDevice(String id) async {
+    await _api.dio.delete('/auth/devices/$id');
   }
 
   Future<void> enableTwoFactor(String pin) async {
