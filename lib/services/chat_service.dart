@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/channel.dart';
+import '../models/community.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import '../models/user.dart';
@@ -95,6 +96,43 @@ class ChatService {
 
   Future<void> unfollowChannel(String id) async {
     await _api.dio.post('/conversations/channels/$id/unfollow');
+  }
+
+  // ===== Komunitas (Community) =====
+  Future<List<CommunitySummary>> listCommunities() async {
+    final res = await _api.dio.get('/conversations/communities/all');
+    return (res.data as List)
+        .map((e) => CommunitySummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CommunityDetail> createCommunity(String name,
+      {String? description}) async {
+    final res = await _api.dio.post('/conversations/communities', data: {
+      'name': name,
+      'description': ?description,
+    });
+    return CommunityDetail.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<CommunityDetail> getCommunity(String id) async {
+    final res = await _api.dio.get('/conversations/communities/$id');
+    return CommunityDetail.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<CommunityDetail> createGroupInCommunity(
+      String communityId, String name, List<String> memberIds) async {
+    final res = await _api.dio.post(
+      '/conversations/communities/$communityId/groups',
+      data: {'name': name, 'memberIds': memberIds},
+    );
+    return CommunityDetail.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Conversation> joinCommunityGroup(String conversationId) async {
+    final res = await _api.dio
+        .post('/conversations/communities/groups/$conversationId/join');
+    return Conversation.fromJson(res.data as Map<String, dynamic>);
   }
 
   Future<Conversation> getConversation(String id) async {

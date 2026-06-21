@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'broadcast_screen.dart';
 import 'channels_screen.dart';
+import 'communities_screen.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({super.key});
@@ -231,6 +232,21 @@ class _NewChatScreenState extends State<NewChatScreen> {
               subtitle: const Text('Ikuti & buat saluran'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ChannelsScreen()),
+              ),
+            ),
+          if (!_groupMode)
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                radius: 24,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: const Icon(Icons.groups_rounded, color: Colors.white),
+              ),
+              title: const Text('Komunitas'),
+              subtitle: const Text('Kelompokkan beberapa grup'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CommunitiesScreen()),
               ),
             ),
           Expanded(
